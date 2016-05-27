@@ -1,14 +1,26 @@
+# -*- coding: utf-8 -*-
+
 from setuptools import setup, find_packages
 from codecs import open
 from os import path
+import re
 
-__version__ = '0.0.1'
+
+version = re.search(
+    '^__version__\s*=\s*"(.*)"',
+    open('ldndc2nc/ldndc2nc.py').read(),
+    re.M
+    ).group(1)
+ 
+ 
+# Get the long description from the README file
+with open("README.rst", "rb") as f:
+    long_descr = f.read().decode("utf-8")
+ 
 
 here = path.abspath(path.dirname(__file__))
 
-# Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+
 
 # get the dependencies and installs
 with open(path.join(here, 'requirements.txt'), encoding='utf-8') as f:
@@ -20,15 +32,15 @@ dependency_links = [x.strip().replace('git+', '') for x in all_reqs if 'git+' no
 setup(
     name='ldndc2nc',
     version=__version__,
-    description='THis package converts LanscapeDNDC output to yearly netCDF files for selected variables',
+    description='This package converts LandscapeDNDC output to yearly netCDF files for selected variables',
     long_description=long_description,
-    url='https://github.com/wdm0006/ldndc2nc',
-    download_url='https://github.com/wdm0006/ldndc2nc/tarball/' + __version__,
-    license='BSD',
+    url='https://gitlab.com/cw_code/ldndc2nc',
+    download_url='https://gitlab.com/cw_code/ldndc2nc/tarball/' + __version__,
+    license='ND',
     classifiers=[
       'Development Status :: 3 - Alpha',
       'Intended Audience :: Developers',
-      'Programming Language :: Python :: 3',
+      'Programming Language :: Python :: 2',
     ],
     keywords='',
     packages=find_packages(exclude=['docs', 'tests*']),
