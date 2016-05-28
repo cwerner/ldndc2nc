@@ -12,30 +12,27 @@ def getConfig( cfgFile=None ):
     """ locate and read config file """
 
     cfg = None
-    
     locations = []
 
-    if cfgFile != None:
+    def cfgfile_was_specified(cfgFile):
+        return cfgFile != None
+
+    if cfgfile_was_specified(cfgFile):
         if os.path.isfile(cfgFile):
             locations += [cfgFile]
 
     locations += [os.curdir, os.path.expanduser("~"), "/etc/ldndc2nc", os.environ.get("LDNDC2NC_CONF")]
+    locations = [x for x in locations if x is not None]
 
     for loc in locations:
         try:
-            if 'ldndc2nc.conf' in os.path.basename(loc):
-                pass
-            else:
+            if 'ldndc2nc.conf' not in os.path.basename(loc):
                 loc = os.path.join( loc, "ldndc2nc.conf" )
-
-            if cfgFile == loc:
-                loc = cfgFile
 
             with open( loc, 'r') as ymlfile:
                 cfg = yaml.load(ymlfile)
                 cfg = DotMap( cfg )
 
-            # processing of variables section
             cfg.variables = cfg.variables.toDict()
 
             for k, vs in cfg.variables.items():
@@ -50,6 +47,7 @@ def getConfig( cfgFile=None ):
                         vs_new.append( (x[0], x[1:]) )
                     else:
                         vs_new.append( v )
+                        
                     cfg.variables[k] = vs_new
 
         except IOError:

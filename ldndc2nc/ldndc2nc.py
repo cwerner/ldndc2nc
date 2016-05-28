@@ -67,9 +67,6 @@ def read_ldndc_txt(inpath, varData, limiter):
 
     YEARS = range(2000, 2015)
 
-    # varData: (nested) variable structure to parse
-    pprint.pprint( varData )
-
     ldndc_txt_files = varData.keys() 
 
     varnames = []   # (updated) column names
@@ -88,6 +85,11 @@ def read_ldndc_txt(inpath, varData, limiter):
         # get all ldndc files of this type (e.g. soilchemistry-daily.txt files)
         infiles = glob.glob( infile_pattern )   
         infiles.sort()
+
+        if len(infiles) == 0:
+            print 'No ldndc output files found matching pattern:'
+            print infile_pattern
+            exit(1)
 
         # special treatment for tuple entries in varData
         for v in varData[ ldndc_txt_file ]:
@@ -211,7 +213,7 @@ LandscapeDNDC txt output files
     parser.add_option("-o", "--outfile", dest="outname", default="outfile.nc", 
             help="name of the output netCDF file (def:outfile.nc)")
 
-    parser.add_option("-c", "--config", dest="config",  
+    parser.add_option("-c", "--config", dest="config", default=None, 
             help="use specific ldndc2nc config file, otherwise look in default locations")
 
     (options, args) = parser.parse_args()
@@ -251,6 +253,7 @@ def main():
     varData = cfg.variables
     limiter = ''                # restrict files by this string
 
+    # parse ldndc output files
     varnames, df = read_ldndc_txt(inpath, cfg.variables, limiter)
 
 
@@ -259,10 +262,10 @@ def main():
     REFNC       = 'VN_MISC4.nc'
 
     # read sim ids from reference file
-    refnc = xr.open_dataset( os.path.join(PATHREFDATA, REFNC) )
-    ids  = refnc['cid'].values
-    lats = refnc['lat'].values
-    lons = refnc['lon'].values
+    with( xr.open_dataset( os.path.join(PATHREFDATA, REFNC) ) ) as refnc:
+        ids  = refnc['cid'].values
+        lats = refnc['lat'].values
+        lons = refnc['lon'].values
 
 
     # create dictionary to quickly map id to ix, jx coordinates of netcdf file
@@ -276,8 +279,6 @@ def main():
         for j in range(len(ids[0])):
             if np.isnan( ids[i,j] ) == False:
                 Dlut[int(ids[i,j])] = (idx[i,j], jdx[i,j])
-
-
 
     if SPLIT:
         print " Splitting into yearly chucks"
