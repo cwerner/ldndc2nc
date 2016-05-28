@@ -7,7 +7,8 @@ author: Christian Werner
 Overview
 --------
 
-THis package converts LanscapeDNDC output to yearly netCDF files for selected variables
+This package converts LanscapeDNDC output to netCDF files for selected variables.
+Currently used for Viet Nam inventory for instance
 
 Installation / Usage
 --------------------
