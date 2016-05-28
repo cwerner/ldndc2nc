@@ -42,6 +42,11 @@ def getNameUnit(vname):
     return out
 
 
+def daterange(start_date, end_date):
+    for n in range(int((end_date - start_date).days)):
+        yield start_date + dt.timedelta(n)
+
+
 def get_ldndc_txt_fileno(fname):
     fname = os.path.basename(fname)
 
@@ -64,38 +69,50 @@ def read_ldndc_txt(inpath, varData, limiter):
 
     YEARS = range(2000, 2015)
 
-    ldndc_txt_files = varData.keys()
+    ldndc_file_types = varData.keys()
 
     varnames = []  # (updated) column names
     Dids = {}  # file ids
 
     df_all = []
 
-    for fileCnt, ldndc_txt_file in enumerate(ldndc_txt_files):
+    def get_ldndc_files(inpath, filetype, limiter=None):
+        """ get all ldndc outfiles of given filetype from inpath (limit using limiter) """
+        infile_pattern = os.path.join(inpath, "*" + ldndc_txt_file)
+
+        infiles = glob.glob(infile_pattern)
+
+        if limiter != None:
+            infiles = [x for x in infiles if limiter in os.path.basename(x)]
+
+        infiles.sort()
+
+        if len(infiles) == 0:
+            print '\nNo LDNDC output files of type "%s"' % filetype
+            print 'found at:', inpath
+            print 'Pattern used:', infile_pattern
+            if limiter != None:
+                print 'Results were filtered:', limiter
+            exit(1)
+
+        return infiles
+
+    for ldndc_file_type in ldndc_file_types:
 
         # concatenate model output into one big table
         dfs = []
         df_names = []
 
-        infile_pattern = os.path.join(inpath, "*" + ldndc_txt_file)
-
-        # get all ldndc files of this type (e.g. soilchemistry-daily.txt files)
-        infiles = glob.glob(infile_pattern)
-        infiles.sort()
-
-        if len(infiles) == 0:
-            print 'No ldndc output files found matching pattern:'
-            print infile_pattern
-            exit(1)
+        infiles = get_ldndc_files(inpath, ldndc_file_type)
 
         # special treatment for tuple entries in varData
-        for v in varData[ldndc_txt_file]:
-            if type(v) == tuple:
-                varnames.append(v[0])
-                df_names += v[1]
+        for vals in varData[ldndc_file_type]:
+            if type(vals) == tuple:
+                varnames.append(vals[0])
+                df_names += vals[1]
             else:
-                varnames.append(v)
-                df_names.append(v)
+                varnames.append(vals)
+                df_names.append(vals)
 
         # standard columns
         basecols = ['id', 'year', 'julianday']
@@ -103,23 +120,29 @@ def read_ldndc_txt(inpath, varData, limiter):
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
 
-            # numeric file identifier
-            fid = get_ldndc_txt_fileno(fname)
+            fno = get_ldndc_txt_fileno(fname)
 
             # read target columns (basecols + df_names)
-            df = pd.read_csv(f,
+            df = pd.read_csv(fname,
                              delim_whitespace=True,
                              error_bad_lines=False,
                              usecols=basecols + df_names)
 
             # store a full set of cell ids in file
-            if Dids.has_key(fid) == False:
-                Dids[fid] = sorted(list(OrderedDict.fromkeys(df['id'])))
+            if Dids.has_key(fno) == False:
+                Dids[fno] = sorted(list(OrderedDict.fromkeys(df['id'])))
 
             # limit data to specified year range
-            df = df[(df.year >= YEARS[0]) & (df.year <= YEARS[-1])]
 
-            # sort based on basecols to prevent noise caused by different buffers
+            def limit_years(years, df):
+                """ limit df to specified years """
+                if years[-1] - years[0] == len(years) - 1:
+                    df = df[(df.year >= years[0]) & (df.year <= years[-1])]
+                else:
+                    df = df[df.year.isin(years)]
+                return df
+
+            df = limit_years(YEARS, df)
             df = df.sort(basecols)
 
             # create date range (in case we have missing data)
@@ -317,8 +340,9 @@ def main():
                     # check for incomplete year data, fill with nodata value till end of year
                     if len(id_group[vname]) < len(data[vname][:, 0, 0]):
                         missingvals = zsize - len(id_group[vname])
-                        dslice = np.concatenate(id_group[vname], np.asarray(
-                            [NODATA] * missingvals))
+                        dslice = np.concatenate(id_group[vname],
+                                                np.asarray([NODATA] *
+                                                           missingvals))
                         print len(dslice)
                     else:
                         dslize = id_group[vname]
