@@ -3,12 +3,15 @@
 # ldndc2nc.py
 # ==================
 #
-# Christian Werner 
+# Christian Werner
 # christian.werner@senckenberg.de
-
 """ldndc2nc.ldndc2nc: provides entry point main()."""
-  
-import sys, pprint, re, os, glob
+
+import glob
+import os
+import pprint
+import re
+import sys
 import datetime as dt
 from collections import OrderedDict
 from optparse import OptionParser
@@ -18,22 +21,17 @@ import param
 
 from .extra import Extra, getConfig
 
-
 __version__ = "0.0.1"
 
-#__version__ = param.Version(release=(0,0,1), fpath=__file__,
+# __version__ = param.Version(release=(0,0,1), fpath=__file__,
 #                            commit="$Format:%h$", reponame='ldndc2nc')
 
-
-
 # default attributes for netCDF variable
-defaultAttrsDA = {
-        '_FillValue':    -9999,
-        'missing_value': -9999
-        }
+defaultAttrsDA = {'_FillValue': -9999, 'missing_value': -9999}
+
 
 # functions
-def getNameUnit( vname ):
+def getNameUnit(vname):
     """ split LDNDC variable into varname and units (based on [) """
     if '[' in vname:
         name, var_units = vname.split('[')
@@ -44,9 +42,8 @@ def getNameUnit( vname ):
     return out
 
 
-
-def get_ldndc_txt_fileno( fname ):
-    fname = os.path.basename( fname )
+def get_ldndc_txt_fileno(fname):
+    fname = os.path.basename(fname)
 
     # find leading zero filenumber:
     # conditions:
@@ -67,23 +64,23 @@ def read_ldndc_txt(inpath, varData, limiter):
 
     YEARS = range(2000, 2015)
 
-    ldndc_txt_files = varData.keys() 
+    ldndc_txt_files = varData.keys()
 
-    varnames = []   # (updated) column names
-    Dids     = {}   # file ids
+    varnames = []  # (updated) column names
+    Dids = {}  # file ids
 
     df_all = []
 
     for fileCnt, ldndc_txt_file in enumerate(ldndc_txt_files):
 
         # concatenate model output into one big table
-        dfs      = []
+        dfs = []
         df_names = []
 
         infile_pattern = os.path.join(inpath, "*" + ldndc_txt_file)
 
         # get all ldndc files of this type (e.g. soilchemistry-daily.txt files)
-        infiles = glob.glob( infile_pattern )   
+        infiles = glob.glob(infile_pattern)
         infiles.sort()
 
         if len(infiles) == 0:
@@ -92,13 +89,13 @@ def read_ldndc_txt(inpath, varData, limiter):
             exit(1)
 
         # special treatment for tuple entries in varData
-        for v in varData[ ldndc_txt_file ]:
+        for v in varData[ldndc_txt_file]:
             if type(v) == tuple:
-                varnames.append( v[0] )
+                varnames.append(v[0])
                 df_names += v[1]
             else:
-                varnames.append( v )
-                df_names.append( v )
+                varnames.append(v)
+                df_names.append(v)
 
         # standard columns
         basecols = ['id', 'year', 'julianday']
@@ -107,35 +104,40 @@ def read_ldndc_txt(inpath, varData, limiter):
         for fcnt, fname in enumerate(infiles):
 
             # numeric file identifier
-            fid = get_ldndc_txt_fileno( fname )
+            fid = get_ldndc_txt_fileno(fname)
 
             # read target columns (basecols + df_names)
-            df = pd.read_csv( f, delim_whitespace=True, error_bad_lines=False, usecols=basecols + df_names )
+            df = pd.read_csv(f,
+                             delim_whitespace=True,
+                             error_bad_lines=False,
+                             usecols=basecols + df_names)
 
             # store a full set of cell ids in file
-            if Dids.has_key( fid ) == False:
-                Dids[ fid ] = sorted(list(OrderedDict.fromkeys(df['id'])))
+            if Dids.has_key(fid) == False:
+                Dids[fid] = sorted(list(OrderedDict.fromkeys(df['id'])))
 
             # limit data to specified year range
             df = df[(df.year >= YEARS[0]) & (df.year <= YEARS[-1])]
-            
+
             # sort based on basecols to prevent noise caused by different buffers
-            df = df.sort(basecols)  
+            df = df.sort(basecols)
 
             # create date range (in case we have missing data)
-            dates_in_file = list(daterange(dt.date(YEARS[0],1,1), dt.date(YEARS[-1]+1,1,1)))
+            dates_in_file = list(daterange(
+                dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
 
             # calculate full table length ids * dates
-            full_df_length =  len(Dids[ fid ]) * len(dates_in_file)
+            full_df_length = len(Dids[fid]) * len(dates_in_file)
 
             # we have less data rows than we should have (i.e. report files)
             # fix this by stretching the dataframe to the appropriate length
             if len(df) < full_df_length:
 
-                dtuples = [(0, x.year, x.timetuple().tm_yday) for x in dates_in_file]
-                
+                dtuples = [(0, x.year, x.timetuple().tm_yday)
+                           for x in dates_in_file]
+
                 df_ref_all = []
-                for id in Dids[ fid ]:
+                for id in Dids[fid]:
                     df_ref = pd.DataFrame(dtuples, columns=basecols)
                     df_ref['id'] = id
                     df_ref_all.append(df_ref)
@@ -156,11 +158,11 @@ def read_ldndc_txt(inpath, varData, limiter):
             continue
 
         # concat the dataframes for the split output (000, 001, ...)
-        df = pd.concat( dfs, axis=0 )
+        df = pd.concat(dfs, axis=0)
         df.set_index(['id', 'year', 'julianday'], inplace=True)
 
         # merge mulitple entry columns (from individual output files: i.e. soilchemistry, harvest-report, ...)
-        for v in varData[ ldndc_txt_file ]:
+        for v in varData[ldndc_txt_file]:
 
             # we have an occurance of 'create a new column based on multiple original ones'
             if type(v) == tuple:
@@ -168,17 +170,17 @@ def read_ldndc_txt(inpath, varData, limiter):
                 df[v[0]] = df[v[1]].sum(axis=1)
 
                 # drop original columns if they are not requested
-                for v2 in varData[ ldndc_txt_file ]:
+                for v2 in varData[ldndc_txt_file]:
                     if type(v2) != tuple:
                         if v2 in v[1]:
-                            v[1].remove( v2 )
-                
+                            v[1].remove(v2)
+
                 for v3 in v[1]:
                     df.drop(v3, axis=1)
 
         # TODO check why we have this line
         df = df[~df.index.duplicated(keep='first')]
-        df_all.append( df )
+        df_all.append(df)
 
     # check if all tables have the same number of rows
     print [len(x) for x in df_all]
@@ -189,9 +191,7 @@ def read_ldndc_txt(inpath, varData, limiter):
     return (varnames, df)
 
 
-
-
-class MyParser( OptionParser ):
+class MyParser(OptionParser):
     def format_epilog(self, formatter):
         return self.epilog
 
@@ -204,17 +204,33 @@ Use this tool to create netCDF files based on standard
 LandscapeDNDC txt output files
 """)
 
-    parser.add_option("-s", "--split", dest="split", action='store_true', default=False, 
-            help="split output in yearly netCDF files with daily resolution")
+    parser.add_option(
+        "-s",
+        "--split",
+        dest="split",
+        action='store_true',
+        default=False,
+        help="split output in yearly netCDF files with daily resolution")
 
-    parser.add_option("-y", "--years", dest="years", default="2000-2015", 
-            help="give the range of years to consider (def:2000-2015)")
+    parser.add_option(
+        "-y",
+        "--years",
+        dest="years",
+        default="2000-2015",
+        help="give the range of years to consider (def:2000-2015)")
 
-    parser.add_option("-o", "--outfile", dest="outname", default="outfile.nc", 
-            help="name of the output netCDF file (def:outfile.nc)")
+    parser.add_option("-o",
+                      "--outfile",
+                      dest="outname",
+                      default="outfile.nc",
+                      help="name of the output netCDF file (def:outfile.nc)")
 
-    parser.add_option("-c", "--config", dest="config", default=None, 
-            help="use specific ldndc2nc config file, otherwise look in default locations")
+    parser.add_option(
+        "-c",
+        "--config",
+        dest="config",
+        default=None,
+        help="use specific ldndc2nc config file, otherwise look in default locations")
 
     (options, args) = parser.parse_args()
 
@@ -226,10 +242,9 @@ LandscapeDNDC txt output files
     return (options, args)
 
 
-
 def greetScreen():
 
-    header="""ldndc2nc :: LandscapeDNDC output converter (v%s)""" % __version__
+    header = """ldndc2nc :: LandscapeDNDC output converter (v%s)""" % __version__
     print(header)
 
 
@@ -239,46 +254,44 @@ def main():
 
     # get command line args and options
     options, args = cli()
-    
-    INPATH  = args[0]
+
+    INPATH = args[0]
     OUTPATH = args[1]
- 
+
     # parse rcfile
-    cfg = getConfig( options.config )
+    cfg = getConfig(options.config)
     if cfg == None:
         print 'No ldndc2nc.conf file found in the required places... exit'
         exit(1)
-    
-    inpath  = '.'
+
+    inpath = '.'
     varData = cfg.variables
-    limiter = ''                # restrict files by this string
+    limiter = ''  # restrict files by this string
 
     # parse ldndc output files
     varnames, df = read_ldndc_txt(inpath, cfg.variables, limiter)
 
-
-    NODATA      = -9999
+    NODATA = -9999
     PATHREFDATA = '.'
-    REFNC       = 'VN_MISC4.nc'
+    REFNC = 'VN_MISC4.nc'
 
     # read sim ids from reference file
-    with( xr.open_dataset( os.path.join(PATHREFDATA, REFNC) ) ) as refnc:
-        ids  = refnc['cid'].values
+    with (xr.open_dataset(os.path.join(PATHREFDATA, REFNC))) as refnc:
+        ids = refnc['cid'].values
         lats = refnc['lat'].values
         lons = refnc['lon'].values
 
-
     # create dictionary to quickly map id to ix, jx coordinates of netcdf file
-    idx = np.array(range(len(ids[0])) * len(ids)).reshape( ids.shape )
-    jdx = np.array([[x]*len(ids[0]) for x in range(len(ids))])
+    idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
+    jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
 
     # TODO make this nicer
     # create lookup dictionary
     Dlut = {}
     for i in range(len(ids)):
         for j in range(len(ids[0])):
-            if np.isnan( ids[i,j] ) == False:
-                Dlut[int(ids[i,j])] = (idx[i,j], jdx[i,j])
+            if np.isnan(ids[i, j]) == False:
+                Dlut[int(ids[i, j])] = (idx[i, j], jdx[i, j])
 
     if SPLIT:
         print " Splitting into yearly chucks"
@@ -288,56 +301,62 @@ def main():
 
             data = {}
             zsize = 365
-            if calendar.isleap( yr ): zsize = 366
+            if calendar.isleap(yr): zsize = 366
 
             for vname in varnames:
-                data[vname]    = np.ma.ones( (zsize, len(ids), len(ids[0]) ) ) * NODATA
+                data[vname] = np.ma.ones((zsize, len(ids), len(ids[0])
+                                          )) * NODATA
                 data[vname][:] = np.ma.masked
 
             # loop group-wise (group: id)
             for id, id_group in yr_group.groupby('id'):
 
-                idx, jdx = Dlut[id]  # get cell position in array 
+                idx, jdx = Dlut[id]  # get cell position in array
 
                 for vname in varnames:
                     # check for incomplete year data, fill with nodata value till end of year
-                    if len(id_group[vname]) < len(data[vname][:,0,0]):
-                        missingvals =  zsize - len(id_group[vname])
-                        dslice = np.concatenate( id_group[vname], np.asarray( [NODATA] * missingvals ) )
+                    if len(id_group[vname]) < len(data[vname][:, 0, 0]):
+                        missingvals = zsize - len(id_group[vname])
+                        dslice = np.concatenate(id_group[vname], np.asarray(
+                            [NODATA] * missingvals))
                         print len(dslice)
                     else:
                         dslize = id_group[vname]
 
                     data[vname][:, jdx, idx] = dslize
 
-
-            
-
             # create an empty netcdf dataset
             ds = xr.Dataset()
-            
+
             # loop over variables and add those the netcdf file
-            times = pd.date_range('%s-01-01' % yr, freq='D', periods=zsize, tz=None)
+            times = pd.date_range('%s-01-01' % yr,
+                                  freq='D',
+                                  periods=zsize,
+                                  tz=None)
             for vname in varnames:
                 name, units = getNameUnit(vname)
-                da = xr.DataArray(data[vname], coords=[('time', times), ('lat', lats), ('lon', lons)])
-                da.name  = name
-                da.attrs.update( defaultAttrsDA )
+                da = xr.DataArray(data[vname],
+                                  coords=[('time', times), ('lat', lats),
+                                          ('lon', lons)])
+                da.name = name
+                da.attrs.update(defaultAttrsDA)
                 da.attrs['units'] = units
 
                 # more optimization for faster netcdfs !!!
-                da.encoding.update( {'complevel':5, 'zlib':True, 'chunksizes': (10,40,20), 'shuffle': True} )  # add compression
+                da.encoding.update({'complevel': 5,
+                                    'zlib': True,
+                                    'chunksizes': (10, 40, 20),
+                                    'shuffle': True})  # add compression
                 ds[vname] = da
 
-
             # write netcdf file
-            ds.attrs.update( defaultAttrsDS )
-            ds.to_netcdf( os.path.join( OUTPATH, options.outfile ), format='NETCDF4_CLASSIC' )
+            ds.attrs.update(defaultAttrsDS)
+            ds.to_netcdf(
+                os.path.join(OUTPATH, options.outfile),
+                format='NETCDF4_CLASSIC')
 
             ds.close()
 
 
-class Boo( Extra ):
+class Boo(Extra):
     pass
-
-
