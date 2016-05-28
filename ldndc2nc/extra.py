@@ -7,7 +7,9 @@
 import yaml, os
 from dotmap import DotMap
 
-def getConfig( cfgFile=None):
+def getConfig( cfgFile=None ):
+
+    """ locate and read config file """
 
     cfg = None
     
@@ -34,17 +36,16 @@ def getConfig( cfgFile=None):
                 cfg = DotMap( cfg )
 
             # processing of variables section
-            # convert variables section to regular dict 
-
             cfg.variables = cfg.variables.toDict()
 
             for k, vs in cfg.variables.items():
                 vs_new = []
                 for v in vs:
-                    # if we have ';' in yaml line this means we want to
-                    # create a new column based on multiple original ones
-                    if ';' in v:
-                        # create tuple from chained items: (newDataItem, [origItem1, origItem2, ...]
+                    
+                    def is_multipart_item(x):
+                        return ';' in x    
+                    
+                    if is_multipart_item(v):
                         x = v.split(';')
                         vs_new.append( (x[0], x[1:]) )
                     else:
