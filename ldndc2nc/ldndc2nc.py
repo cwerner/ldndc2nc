@@ -10,19 +10,19 @@
   
 import sys, pprint, re, os, glob
 import datetime as dt
-import pandas as pd
-
 from collections import OrderedDict
 from optparse import OptionParser
+
+import pandas as pd
+import param
 
 from .extra import Extra, getConfig
 
 
-#__version__ = "0.0.1"
+__version__ = "0.0.1"
 
-__version__ = param.Version(release=(0,0,1), fpath=__file__,
-
-                            commit="$Format:%h$", reponame='ldndc2nc')
+#__version__ = param.Version(release=(0,0,1), fpath=__file__,
+#                            commit="$Format:%h$", reponame='ldndc2nc')
 
 
 

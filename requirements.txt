@@ -1,4 +1,7 @@
 # Dev/Deployment
+param
+pandas
+xarray
 sphinx
 sphinx_rtd_theme
 nose

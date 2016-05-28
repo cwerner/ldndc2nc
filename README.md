@@ -19,7 +19,7 @@ To install use pip:
 
 Or clone the repo:
 
-    $ git clone https://github.com/wdm0006/ldndc2nc.git
+    $ git clone https://gitlab.com/cw_code/ldndc2nc.git
     $ python setup.py install
     
 Contributing
