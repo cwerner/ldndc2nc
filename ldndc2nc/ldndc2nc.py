@@ -31,14 +31,14 @@ defaultAttrsDA = {'_FillValue': -9999, 'missing_value': -9999}
 
 
 # functions
-def getNameUnit(vname):
-    """ split LDNDC variable into varname and units (based on [) """
+def _split_colname(vname):
+    """ split ldndc colname into varname and units (based on [) """
+
+    out = (vname, "unknown")
     if '[' in vname:
         name, var_units = vname.split('[')
         units = var_units[:-1]
         out = (name, units)
-    else:
-        out = (vname, "unknown")
     return out
 
 
@@ -48,20 +48,42 @@ def daterange(start_date, end_date):
 
 
 def get_ldndc_txt_fileno(fname):
-    fname = os.path.basename(fname)
-
-    # find leading zero filenumber:
-    # conditions:
-    # - must be at least 2 and max of 6 digits long (!)
+    fname  = os.path.basename(fname)
+    fileno = 0 
+    # find leading zero filenumber in string
+    # (must be 2-6 digits long)
     x = re.findall(r"[0-9]{2,6}(?![0-9])", fname)
     if len(x) == 0:
-        return 0
+        pass
     elif len(x) == 1:
-        return [int(a) for a in x]
+        fileno = int(x[0])
     else:
-        print 'Multiple matches! This cannot be.'
+        print 'Multiple matches! This should not be.'
         print fname
-        exit(-1)
+        raise
+    return fileno
+
+
+def select_ldndc_files(inpath, ldndc_file_type, limiter=None):
+    """ get all ldndc outfiles of given filetype from inpath (limit using limiter) """
+    infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
+    infiles = glob.glob(infile_pattern)
+
+    if limiter is not None:
+        infiles = [x for x in infiles if limiter in os.path.basename(x)]
+
+    infiles.sort()
+
+    if len(infiles) == 0:
+        print '\nNo LDNDC output files of type "%s"' % ldndc_file_type
+        print 'Input directory:', inpath
+        print 'Pattern used:   ', infile_pattern
+        if limiter is not None:
+            print 'Filter used:', limiter
+        exit(1)
+
+    return infiles
+
 
 
 def read_ldndc_txt(inpath, varData, limiter):
@@ -76,33 +98,13 @@ def read_ldndc_txt(inpath, varData, limiter):
 
     df_all = []
 
-    def get_ldndc_files(inpath, ldndc_file_type, limiter=None):
-        """ get all ldndc outfiles of given filetype from inpath (limit using limiter) """
-        infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
-
-        infiles = glob.glob(infile_pattern)
-
-        if limiter is not None:
-            infiles = [x for x in infiles if limiter in os.path.basename(x)]
-
-        infiles.sort()
-
-        if len(infiles) == 0:
-            print '\nNo LDNDC output files of type "%s"' % ldndc_file_type
-            print 'Input directory:', inpath
-            print 'Pattern used:   ', infile_pattern
-            if limiter is not None:
-                print 'Filter used:', limiter
-            exit(1)
-
-        return infiles
 
     for ldndc_file_type in ldndc_file_types:
 
         dfs = []
         df_names = []
 
-        infiles = get_ldndc_files(inpath, ldndc_file_type)
+        infiles = select_ldndc_files(inpath, ldndc_file_type)
 
         # special treatment for tuple entries in varData
         for vals in varData[ldndc_file_type]:
@@ -219,6 +221,7 @@ class MyParser(OptionParser):
 
 
 def cli():
+    """ command line interface """
 
     parser = MyParser( "usage: %prog [options] indir outdir", \
             epilog="""
@@ -357,7 +360,7 @@ def main():
                                   periods=zsize,
                                   tz=None)
             for vname in varnames:
-                name, units = getNameUnit(vname)
+                name, units = _split_colname(vname)
                 da = xr.DataArray(data[vname],
                                   coords=[('time', times), ('lat', lats),
                                           ('lon', lons)])
