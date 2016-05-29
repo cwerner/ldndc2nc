@@ -5,7 +5,7 @@ import yaml, os
 from dotmap import DotMap
 
 
-def getConfig(cfgFile=None):
+def get_config(cfgFile=None):
     """ locate and read config file """
 
     cfg = None
@@ -50,7 +50,6 @@ def getConfig(cfgFile=None):
 
         except IOError:
             pass
-
     return cfg
 
 

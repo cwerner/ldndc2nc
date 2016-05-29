@@ -19,7 +19,7 @@ from optparse import OptionParser
 import pandas as pd
 import param
 
-from .extra import Extra, getConfig
+from .extra import Extra, get_config
 
 __version__ = "0.0.1"
 
@@ -76,30 +76,29 @@ def read_ldndc_txt(inpath, varData, limiter):
 
     df_all = []
 
-    def get_ldndc_files(inpath, filetype, limiter=None):
+    def get_ldndc_files(inpath, ldndc_file_type, limiter=None):
         """ get all ldndc outfiles of given filetype from inpath (limit using limiter) """
-        infile_pattern = os.path.join(inpath, "*" + ldndc_txt_file)
+        infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
 
         infiles = glob.glob(infile_pattern)
 
-        if limiter != None:
+        if limiter is not None:
             infiles = [x for x in infiles if limiter in os.path.basename(x)]
 
         infiles.sort()
 
         if len(infiles) == 0:
-            print '\nNo LDNDC output files of type "%s"' % filetype
-            print 'found at:', inpath
-            print 'Pattern used:', infile_pattern
-            if limiter != None:
-                print 'Results were filtered:', limiter
+            print '\nNo LDNDC output files of type "%s"' % ldndc_file_type
+            print 'Input directory:', inpath
+            print 'Pattern used:   ', infile_pattern
+            if limiter is not None:
+                print 'Filter used:', limiter
             exit(1)
 
         return infiles
 
     for ldndc_file_type in ldndc_file_types:
 
-        # concatenate model output into one big table
         dfs = []
         df_names = []
 
@@ -282,7 +281,7 @@ def main():
     OUTPATH = args[1]
 
     # parse rcfile
-    cfg = getConfig(options.config)
+    cfg = get_config(options.config)
     if cfg == None:
         print 'No ldndc2nc.conf file found in the required places... exit'
         exit(1)
