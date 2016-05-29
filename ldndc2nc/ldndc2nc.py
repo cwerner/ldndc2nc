@@ -48,8 +48,8 @@ def daterange(start_date, end_date):
 
 
 def get_ldndc_txt_fileno(fname):
-    fname  = os.path.basename(fname)
-    fileno = 0 
+    fname = os.path.basename(fname)
+    fileno = 0
     # find leading zero filenumber in string
     # (must be 2-6 digits long)
     x = re.findall(r"[0-9]{2,6}(?![0-9])", fname)
@@ -85,7 +85,6 @@ def select_ldndc_files(inpath, ldndc_file_type, limiter=None):
     return infiles
 
 
-
 def read_ldndc_txt(inpath, varData, limiter):
     """ parse ldndc txt output files and return dataframe """
 
@@ -97,7 +96,6 @@ def read_ldndc_txt(inpath, varData, limiter):
     Dids = {}  # file ids
 
     df_all = []
-
 
     for ldndc_file_type in ldndc_file_types:
 

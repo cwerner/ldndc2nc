@@ -14,7 +14,7 @@ version = re.search(
  
  
 # Get the long description from the README file
-with open("README.rst", "rb") as f:
+with open("README.md", "rb") as f:
     long_descr = f.read().decode("utf-8")
  
 
@@ -31,11 +31,12 @@ dependency_links = [x.strip().replace('git+', '') for x in all_reqs if 'git+' no
 
 setup(
     name='ldndc2nc',
-    version=__version__,
-    description='This package converts LandscapeDNDC output to yearly netCDF files for selected variables',
-    long_description=long_description,
+    version=version,
+    description='This package converts LandscapeDNDC output to netCDF files',
+    long_description=long_descr,
+    entry_points = { "console_scripts": ['ldndc2nc = ldndc2nc.ldndc2nc:main']},
     url='https://gitlab.com/cw_code/ldndc2nc',
-    download_url='https://gitlab.com/cw_code/ldndc2nc/tarball/' + __version__,
+    download_url='https://gitlab.com/cw_code/ldndc2nc/tarball/' + version,
     license='ND',
     classifiers=[
       'Development Status :: 3 - Alpha',
