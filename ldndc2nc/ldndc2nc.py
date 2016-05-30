@@ -31,27 +31,46 @@ defaultAttrsDA = {'_FillValue': -9999, 'missing_value': -9999}
 
 
 # functions
-def _split_colname(vname):
-    """ split ldndc colname into varname and units (based on [) """
+def _split_colname(colname):
+    """ split colname into varname and units 
 
-    out = (vname, "unknown")
-    if '[' in vname:
-        name, var_units = vname.split('[')
+        :param str colname: original ldndc outputfile colname
+        :return: varname and unit
+        :rtype: tuple
+    """
+    out = (colname, "unknown")
+    if '[' in colname:
+        name, var_units = colname.split('[')
         units = var_units[:-1]
         out = (name, units)
     return out
 
 
-def daterange(start_date, end_date):
+def _daterange(start_date, end_date):
+    """ create timeseries
+    
+        :param str start_date: start date
+        :param str end_date: start date
+
+        :return: list of dates
+        :rtype: iterator
+    """
     for n in range(int((end_date - start_date).days)):
         yield start_date + dt.timedelta(n)
 
 
-def get_ldndc_txt_fileno(fname):
+def _extract_fileno(fname):
+    """ extract file iterator
+    
+        :param str fname: ldndc txt filename
+        :return: file number
+        :rtype: int
+
+        example: GLOBAL_002_soilchemistry-daily.txt -> 002 -> 2
+    """
     fname = os.path.basename(fname)
     fileno = 0
-    # find leading zero filenumber in string
-    # (must be 2-6 digits long)
+    # find fileno in string (must be 2-6 digits long)
     x = re.findall(r"[0-9]{2,6}(?![0-9])", fname)
     if len(x) == 0:
         pass
@@ -64,8 +83,15 @@ def get_ldndc_txt_fileno(fname):
     return fileno
 
 
-def select_ldndc_files(inpath, ldndc_file_type, limiter=None):
-    """ get all ldndc outfiles of given filetype from inpath (limit using limiter) """
+def _select_files(inpath, ldndc_file_type, limiter=None):
+    """ find all ldndc outfiles of given type from inpath (limit using limiter)
+    
+        :param str inpath: path where files are located
+        :param str ldndc_file_type: LandscapeDNDC txt filename pattern (i.e. soilcheistry-daily.txt)
+        :param str limiter: (optionally) limit selection with this expression
+        :return: list of matching LandscapeDNDC txt files
+        :rtype: list
+    """
     infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
     infiles = glob.glob(infile_pattern)
 
@@ -102,7 +128,7 @@ def read_ldndc_txt(inpath, varData, limiter):
         dfs = []
         df_names = []
 
-        infiles = select_ldndc_files(inpath, ldndc_file_type)
+        infiles = _select_files(inpath, ldndc_file_type)
 
         # special treatment for tuple entries in varData
         for vals in varData[ldndc_file_type]:
@@ -119,7 +145,7 @@ def read_ldndc_txt(inpath, varData, limiter):
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
 
-            fno = get_ldndc_txt_fileno(fname)
+            fno = _extract_fileno(fname)
 
             # read target columns (basecols + df_names)
             df = pd.read_csv(fname,
@@ -144,8 +170,7 @@ def read_ldndc_txt(inpath, varData, limiter):
             df = limit_years(YEARS, df)
             df = df.sort(basecols)
 
-            # create date range (in case we have missing data)
-            dates_in_file = list(daterange(
+            dates_in_file = list(_daterange(
                 dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
 
             # calculate full table length ids * dates
