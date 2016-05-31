@@ -111,6 +111,16 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
     return infiles
 
 
+
+def _limit_years(years, df, yearcol='year'):
+    """ limit data.frame to specified years """
+    if years[-1] - years[0] == len(years) - 1:
+        df = df[(df[yearcol] >= years[0]) & (df[yearcol] <= years[-1])]
+    else:
+        df = df[df[yearcol].isin(years)]
+    return df
+
+
 def read_ldndc_txt(inpath, varData, limiter):
     """ parse ldndc txt output files and return dataframe """
 
@@ -126,7 +136,7 @@ def read_ldndc_txt(inpath, varData, limiter):
     for ldndc_file_type in ldndc_file_types:
 
         dfs = []
-        df_names = []
+        dfcolnames = []
 
         infiles = _select_files(inpath, ldndc_file_type)
 
@@ -134,10 +144,10 @@ def read_ldndc_txt(inpath, varData, limiter):
         for vals in varData[ldndc_file_type]:
             if type(vals) == tuple:
                 varnames.append(vals[0])
-                df_names += vals[1]
+                dfcolnames += vals[1]
             else:
                 varnames.append(vals)
-                df_names.append(vals)
+                dfcolnames.append(vals)
 
         # standard columns
         basecols = ['id', 'year', 'julianday']
@@ -151,53 +161,43 @@ def read_ldndc_txt(inpath, varData, limiter):
             df = pd.read_csv(fname,
                              delim_whitespace=True,
                              error_bad_lines=False,
-                             usecols=basecols + df_names)
+                             usecols=basecols + dfcolnames)
 
             # store a full set of cell ids in file
             if Dids.has_key(fno) == False:
                 Dids[fno] = sorted(list(OrderedDict.fromkeys(df['id'])))
 
-            # limit data to specified year range
 
-            def limit_years(years, df):
-                """ limit df to specified years """
-                if years[-1] - years[0] == len(years) - 1:
-                    df = df[(df.year >= years[0]) & (df.year <= years[-1])]
-                else:
-                    df = df[df.year.isin(years)]
-                return df
-
-            df = limit_years(YEARS, df)
+            df = _limit_years(YEARS, df)
             df = df.sort(basecols)
 
-            dates_in_file = list(_daterange(
-                dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
 
             # calculate full table length ids * dates
-            full_df_length = len(Dids[fid]) * len(dates_in_file)
+            expected_len_df = len(Dids[fid]) * len(dates_in_file)
+            actual_len_df = len(df)
+            
+            if actual_len_df < expected_len_df:
 
-            # we have less data rows than we should have (i.e. report files)
-            # fix this by stretching the dataframe to the appropriate length
-            if len(df) < full_df_length:
+                daterange_file = list(_daterange(
+                    dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
 
-                dtuples = [(0, x.year, x.timetuple().tm_yday)
-                           for x in dates_in_file]
+
+                basecoldata = [(0, d.year, d.timetuple().tm_yday)
+                           for d in daterange_file]
 
                 df_ref_all = []
                 for id in Dids[fid]:
-                    df_ref = pd.DataFrame(dtuples, columns=basecols)
-                    df_ref['id'] = id
+                    df_ref = pd.DataFrame(basecoldata, columns=basecols)
+                    df_ref.id = id
                     df_ref_all.append(df_ref)
-                df_ref = pd.concat(df_ref_all, axis=0)
+                df_template = pd.concat(df_ref_all, axis=0)
 
-                # merge data dataframe with this reference df
-                df = pd.merge(df_ref, df, how='left', on=basecols)
-
-                # fill all new rows with zeros
+                # merge data from file to df template, values of missing days
+                # in file will be assigned 0.0
+                df = pd.merge(df_template, df, how='left', on=basecols)
                 df = df.fillna(0.0)
                 df.reset_index()
 
-            # sort again (just to be sure)
             df = df.sort(basecols)
 
         # we don't have any dataframes, return
