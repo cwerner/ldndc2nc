@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from setuptools import setup, find_packages
+from setuptools.command.test import test as TestCommand
+
 from codecs import open
 from os import path
 import re
@@ -34,6 +36,19 @@ install_requires = [x.strip() for x in all_reqs if 'git+' not in x]
 dependency_links = [x.strip().replace('git+', '') for x in all_reqs
                     if 'git+' not in x]
 
+
+class PyTest(TestCommand):
+    def finalize_options(self):
+        TestCommand.finalize_options(self)
+        self.test_args = []
+        self.test_suite = True
+
+    def run_tests(self):
+        import pytest
+        errcode = pytest.main(self.test_args)
+        sys.exit(errcode)
+
+
 setup(name='ldndc2nc',
       version=version,
       description='This package converts LandscapeDNDC output to netCDF files',
@@ -49,8 +64,14 @@ setup(name='ldndc2nc',
       ],
       keywords='',
       packages=find_packages(exclude=['docs', 'tests*']),
+      platforms='any',
+      test_suite='ldndc2nc.test.test_ldndc2nc',
+      cmdclass={'test': PyTest},
       include_package_data=True,
       author='Christian Werner',
       install_requires=install_requires,
       dependency_links=dependency_links,
+      extras_require={
+          'testing': ['pytest'],
+      },
       author_email='christian.werner@senckenberg.de')
