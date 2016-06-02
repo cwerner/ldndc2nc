@@ -28,8 +28,10 @@ __version__ = "0.0.1"
 # __version__ = param.Version(release=(0,0,1), fpath=__file__,
 #                            commit="$Format:%h$", reponame='ldndc2nc')
 
+NODATA = -9999
+
 # default attributes for netCDF variable of dataarrays
-defaultAttrsDA = {'_FillValue': -9999, 'missing_value': -9999}
+defaultAttrsDA = {'_FillValue': NODATA, 'missing_value': NODATA}
 
 # functions
 def _split_colname(colname):
@@ -318,8 +320,6 @@ def main():
     # parse ldndc output files
     varnames, df = read_ldndc_txt(inpath, cfg.variables, limiter)
 
-    NODATA = -9999
-
     # TODO read from external conf file or cmd parameter
     PATHREFDATA='/Users/cwerner/Documents/projects/vietnam/refdata'
     REFNC = 'VN_MISC4.nc'
@@ -409,7 +409,7 @@ def main():
                 outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
 
             ds.to_netcdf(
-                os.path.join(outpath, options.outfile),
+                os.path.join(outpath, outfilename),
                 format='NETCDF4_CLASSIC')
 
             ds.close()
