@@ -398,7 +398,7 @@ def main():
                                     'zlib': True,
                                     'chunksizes': (10, 40, 20),
                                     'shuffle': True})  # add compression
-                ds[vname] = da
+                ds[name] = da
 
             # write netcdf file
             # TODO enable, read info from ldndc.conf
