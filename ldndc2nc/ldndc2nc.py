@@ -317,7 +317,7 @@ def main():
         print 'No ldndc2nc.conf file found in the required places... exit'
         exit(1)
 
-    varData = cfg.variables
+
 
     # parse ldndc output files
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years)

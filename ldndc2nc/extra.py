@@ -4,6 +4,12 @@
 import yaml, os
 from dotmap import DotMap
 
+from pkg_resources import Requirement, resource_filename
+
+def _copy_default_config():
+    fname = resource_filename(Requirement.parse("ldndc2nc"),"ldndc2nc.conf")
+    print fname
+    exit()
 
 def get_config(cfgFile=None):
     """ locate and read config file """
@@ -18,9 +24,17 @@ def get_config(cfgFile=None):
         if os.path.isfile(cfgFile):
             locations += [cfgFile]
 
-    locations += [os.curdir, os.path.expanduser("~"), "/etc/ldndc2nc",
+    # disable os.curdir for the moment
+
+    #locations += [os.curdir, os.path.expanduser("~"), "/etc/ldndc2nc",
+    #              os.environ.get("LDNDC2NC_CONF")]
+
+    locations += [os.path.expanduser("~"), "/etc/ldndc2nc",
                   os.environ.get("LDNDC2NC_CONF")]
+
     locations = [x for x in locations if x is not None]
+
+    was_found = False
 
     for loc in locations:
         try:
@@ -31,6 +45,8 @@ def get_config(cfgFile=None):
                 cfg = yaml.load(ymlfile)
                 cfg = DotMap(cfg)
 
+
+            was_found = True
             cfg.variables = cfg.variables.toDict()
 
             for k, vs in cfg.variables.items():
@@ -50,6 +66,11 @@ def get_config(cfgFile=None):
 
         except IOError:
             pass
+
+
+    if not was_found:
+        _copy_default_config()
+
     return cfg
 
 
