@@ -11,6 +11,7 @@ import calendar
 import glob
 import os
 import re
+import string
 import sys
 import datetime as dt
 from collections import OrderedDict
@@ -127,10 +128,8 @@ def _limit_years(years, df, yearcol='year'):
     return df
 
 
-def read_ldndc_txt(inpath, varData, limiter):
+def read_ldndc_txt(inpath, varData, years, limiter=''):
     """ parse ldndc txt output files and return dataframe """
-
-    YEARS = range(2000, 2015)
 
     ldndc_file_types = varData.keys()
 
@@ -172,13 +171,13 @@ def read_ldndc_txt(inpath, varData, limiter):
             if Dids.has_key(fno) == False:
                 Dids[fno] = sorted(list(OrderedDict.fromkeys(df['id'])))
 
-            df = _limit_years(YEARS, df)
+            df = _limit_years(years, df)
             df = df.sort_values(by=basecols)
 
             # calculate full table length ids * dates
 
             daterange_file = list(_daterange(
-                dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
+                dt.date(years[0], 1, 1), dt.date(years[-1] + 1, 1, 1)))
 
             expected_len_df = len(Dids[fno]) * len(daterange_file)
             actual_len_df = len(df)
@@ -308,6 +307,10 @@ def main():
     inpath  = args[0]
     outpath = args[1]
 
+    # parse year range
+    a = [int(x) for x in string.split(options.years, '-')]
+    years = range(a[0], a[1]+1)
+
     # parse rcfile
     cfg = get_config(options.config)
     if cfg == None:
@@ -315,10 +318,9 @@ def main():
         exit(1)
 
     varData = cfg.variables
-    limiter = ''  # restrict files by this string
 
     # parse ldndc output files
-    varnames, df = read_ldndc_txt(inpath, cfg.variables, limiter)
+    varnames, df = read_ldndc_txt(inpath, cfg.variables, years)
 
     # TODO read from external conf file or cmd parameter
     PATHREFDATA='/Users/cwerner/Documents/projects/vietnam/refdata'
