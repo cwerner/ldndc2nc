@@ -22,7 +22,7 @@ import pandas as pd
 import param
 import xarray as xr
 
-from .extra import Extra, get_config
+from .extra import get_config
 
 __version__ = "0.0.1"
 
@@ -33,6 +33,7 @@ NODATA = -9999
 
 # default attributes for netCDF variable of dataarrays
 defaultAttrsDA = {'_FillValue': NODATA, 'missing_value': NODATA}
+
 
 # functions
 def _split_colname(colname):
@@ -304,26 +305,23 @@ def main():
     # get command line args and options
     options, args = cli()
 
-    inpath  = args[0]
+    inpath = args[0]
     outpath = args[1]
 
     # parse year range
     a = [int(x) for x in string.split(options.years, '-')]
-    years = range(a[0], a[1]+1)
+    years = range(a[0], a[1] + 1)
 
     # parse rcfile
     cfg = get_config(options.config)
-    if cfg == None:
-        print 'No ldndc2nc.conf file found in the required places... exit'
-        exit(1)
 
-
+    print cfg
 
     # parse ldndc output files
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years)
 
     # TODO read from external conf file or cmd parameter
-    PATHREFDATA='/Users/cwerner/Documents/projects/vietnam/refdata'
+    PATHREFDATA = '/Users/cwerner/Documents/projects/vietnam/refdata'
     REFNC = 'VN_MISC4.nc'
     SPLIT = True
 
@@ -356,8 +354,8 @@ def main():
             if calendar.isleap(yr): zsize = 366
 
             for vname in varnames:
-                data[vname] = np.ma.ones((zsize, len(ids),
-                                          len(ids[0]))) * NODATA
+                data[vname] = np.ma.ones((zsize, len(ids), len(ids[0])
+                                          )) * NODATA
                 data[vname][:] = np.ma.masked
 
             # loop group-wise (group: id)
@@ -369,8 +367,9 @@ def main():
                     # check for incomplete year data, fill with nodata value till end of year
                     if len(id_group[vname]) < len(data[vname][:, 0, 0]):
                         missingvals = zsize - len(id_group[vname])
-                        dslice = np.concatenate(id_group[vname], np.asarray(
-                            [NODATA] * missingvals))
+                        dslice = np.concatenate(id_group[vname],
+                                                np.asarray([NODATA] *
+                                                           missingvals))
                         print len(dslice)
                     else:
                         dslize = id_group[vname]

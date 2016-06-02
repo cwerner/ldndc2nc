@@ -1,15 +1,62 @@
 # -*- coding: utf-8 -*-
 """ldndc2nc.extra: extra module within the ldndc2nc package."""
 
-import yaml, os
+import os
+import shutil
+import yaml
 from dotmap import DotMap
-
 from pkg_resources import Requirement, resource_filename
 
+
 def _copy_default_config():
-    fname = resource_filename(Requirement.parse("ldndc2nc"),"ldndc2nc.conf")
-    print fname
-    exit()
+    fname = resource_filename(
+        Requirement.parse("ldndc2nc"), "ldndc2nc/data/ldndc2nc.conf")
+    shutil.copyfile(fname, os.path.join(
+        os.path.expanduser("~"), "ldndc2nc.conf"))
+
+
+def _find_config():
+    """ look for cfgFile in the default locations """
+    cfgFile = None
+    locations = [os.curdir, os.path.expanduser("~"), "/etc/ldndc2nc",
+                 os.environ.get("LDNDC2NC_CONF")]
+    locations = [x for x in locations if x is not None]
+
+    for loc in locations:
+        f = os.path.join(loc, "ldndc2nc.conf")
+        if os.path.isfile(f):
+            cfgFile = f
+            break
+
+    return cfgFile
+
+
+def _parse_config(cfgFile):
+    """ read yaml config file and modify special properties"""
+
+    with open(cfgFile, 'r') as ymlfile:
+        cfg = yaml.load(ymlfile)
+        cfg = DotMap(cfg)
+
+    cfg.variables = cfg.variables.toDict()
+
+    for k, vs in cfg.variables.items():
+        vs_new = []
+        for v in vs:
+
+            def is_multipart_item(x):
+                return ';' in x
+
+            if is_multipart_item(v):
+                x = v.split(';')
+                vs_new.append((x[0], x[1:]))
+            else:
+                vs_new.append(v)
+
+            cfg.variables[k] = vs_new
+
+    return cfg
+
 
 def get_config(cfgFile=None):
     """ locate and read config file """
@@ -17,62 +64,21 @@ def get_config(cfgFile=None):
     cfg = None
     locations = []
 
-    def cfgfile_was_specified(cfgFile):
+    def cfgfile_exists(cfgFile):
         return cfgFile != None
 
-    if cfgfile_was_specified(cfgFile):
-        if os.path.isfile(cfgFile):
-            locations += [cfgFile]
+    if cfgfile_exists(cfgFile):
+        if not os.path.isfile(cfgFile):
+            print "Specified configuration file not found."
+            exit(1)
+    else:
+        cfgFile = _find_config()
 
-    # disable os.curdir for the moment
+        if not cfgfile_exists(cfgFile):
+            print 'copying config file'
+            _copy_default_config()
+            cfgFile = _find_config()
 
-    #locations += [os.curdir, os.path.expanduser("~"), "/etc/ldndc2nc",
-    #              os.environ.get("LDNDC2NC_CONF")]
-
-    locations += [os.path.expanduser("~"), "/etc/ldndc2nc",
-                  os.environ.get("LDNDC2NC_CONF")]
-
-    locations = [x for x in locations if x is not None]
-
-    was_found = False
-
-    for loc in locations:
-        try:
-            if 'ldndc2nc.conf' not in os.path.basename(loc):
-                loc = os.path.join(loc, "ldndc2nc.conf")
-
-            with open(loc, 'r') as ymlfile:
-                cfg = yaml.load(ymlfile)
-                cfg = DotMap(cfg)
-
-
-            was_found = True
-            cfg.variables = cfg.variables.toDict()
-
-            for k, vs in cfg.variables.items():
-                vs_new = []
-                for v in vs:
-
-                    def is_multipart_item(x):
-                        return ';' in x
-
-                    if is_multipart_item(v):
-                        x = v.split(';')
-                        vs_new.append((x[0], x[1:]))
-                    else:
-                        vs_new.append(v)
-
-                    cfg.variables[k] = vs_new
-
-        except IOError:
-            pass
-
-
-    if not was_found:
-        _copy_default_config()
+    cfg = _parse_config(cfgFile)
 
     return cfg
-
-
-class Extra(object):
-    pass
