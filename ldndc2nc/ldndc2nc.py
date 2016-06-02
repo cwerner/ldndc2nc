@@ -302,28 +302,24 @@ def main():
 
     greetScreen()
 
-    # get command line args and options
+    # process command line args and options
     options, args = cli()
 
     inpath = args[0]
     outpath = args[1]
 
-    # parse year range
     a = [int(x) for x in string.split(options.years, '-')]
     years = range(a[0], a[1] + 1)
 
-    # parse rcfile
+    # read config
     cfg = get_config(options.config)
 
-    print cfg
-
-    # parse ldndc output files
+    # read source output from ldndc
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years)
 
     # TODO read from external conf file or cmd parameter
     PATHREFDATA = '/Users/cwerner/Documents/projects/vietnam/refdata'
     REFNC = 'VN_MISC4.nc'
-    SPLIT = True
 
     # read sim ids from reference file
     with (xr.open_dataset(os.path.join(PATHREFDATA, REFNC))) as refnc:
@@ -331,7 +327,6 @@ def main():
         lats = refnc['lat'].values
         lons = refnc['lon'].values
 
-    # create dictionary to quickly map id to ix, jx coordinates of netcdf file
     idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
     jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
 
@@ -343,7 +338,7 @@ def main():
             if np.isnan(ids[i, j]) == False:
                 Dlut[int(ids[i, j])] = (idx[i, j], jdx[i, j])
 
-    if SPLIT:
+    if options.split:
         print " Splitting into yearly chucks"
 
         # loop group-wise (group: year)
@@ -406,7 +401,7 @@ def main():
             #ds.attrs.update(defaultAttrsDS)
             outfilename = options.outfile
 
-            if SPLIT:
+            if options.split:
                 outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
 
             ds.to_netcdf(
