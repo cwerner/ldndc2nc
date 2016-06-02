@@ -59,6 +59,10 @@ def _daterange(start_date, end_date):
         yield start_date + dt.timedelta(n)
 
 
+def _is_composite_var(v):
+    return type(v) == tuple
+
+
 def _extract_fileno(fname):
     """ extract file iterator
     
@@ -111,7 +115,6 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
     return infiles
 
 
-
 def _limit_years(years, df, yearcol='year'):
     """ limit data.frame to specified years """
     if years[-1] - years[0] == len(years) - 1:
@@ -136,18 +139,18 @@ def read_ldndc_txt(inpath, varData, limiter):
     for ldndc_file_type in ldndc_file_types:
 
         dfs = []
-        dfcolnames = []
+        datacols = []
 
         infiles = _select_files(inpath, ldndc_file_type)
 
         # special treatment for tuple entries in varData
-        for vals in varData[ldndc_file_type]:
-            if type(vals) == tuple:
-                varnames.append(vals[0])
-                dfcolnames += vals[1]
+        for v in varData[ldndc_file_type]:
+            if _is_composite_var(v):
+                varnames.append(v[0])
+                datacols += v[1]
             else:
-                varnames.append(vals)
-                dfcolnames.append(vals)
+                varnames.append(v)
+                datacols.append(v)
 
         # standard columns
         basecols = ['id', 'year', 'julianday']
@@ -157,33 +160,29 @@ def read_ldndc_txt(inpath, varData, limiter):
 
             fno = _extract_fileno(fname)
 
-            # read target columns (basecols + df_names)
             df = pd.read_csv(fname,
                              delim_whitespace=True,
                              error_bad_lines=False,
-                             usecols=basecols + dfcolnames)
+                             usecols=basecols + datacols)
 
             # store a full set of cell ids in file
             if Dids.has_key(fno) == False:
                 Dids[fno] = sorted(list(OrderedDict.fromkeys(df['id'])))
 
-
             df = _limit_years(YEARS, df)
             df = df.sort(basecols)
-
 
             # calculate full table length ids * dates
             expected_len_df = len(Dids[fid]) * len(dates_in_file)
             actual_len_df = len(df)
-            
+
             if actual_len_df < expected_len_df:
 
                 daterange_file = list(_daterange(
                     dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
 
-
                 basecoldata = [(0, d.year, d.timetuple().tm_yday)
-                           for d in daterange_file]
+                               for d in daterange_file]
 
                 df_ref_all = []
                 for id in Dids[fid]:
@@ -208,22 +207,21 @@ def read_ldndc_txt(inpath, varData, limiter):
         df = pd.concat(dfs, axis=0)
         df.set_index(['id', 'year', 'julianday'], inplace=True)
 
-        # merge mulitple entry columns (from individual output files: i.e. soilchemistry, harvest-report, ...)
         for v in varData[ldndc_txt_file]:
 
-            # we have an occurance of 'create a new column based on multiple original ones'
-            if type(v) == tuple:
-                # sum original columns
-                df[v[0]] = df[v[1]].sum(axis=1)
+            if _is_composite_var(v):
+                new_colname, src_colnames = v
+                drop_colnames = []
 
-                # drop original columns if they are not requested
+                df[new_colname] = df[src_colnames].sum(axis=1)
+
+                # drop original columns if they are not explicitly requested
                 for v2 in varData[ldndc_txt_file]:
-                    if type(v2) != tuple:
-                        if v2 in v[1]:
-                            v[1].remove(v2)
+                    if not _is_composite_var(v2):
+                        if v2 in src_colnames:
+                            drop_colnames.append(v2)
 
-                for v3 in v[1]:
-                    df.drop(v3, axis=1)
+                df.drop(drop_names, axis=1)
 
         # TODO check why we have this line
         df = df[~df.index.duplicated(keep='first')]
