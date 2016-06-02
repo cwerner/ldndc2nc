@@ -7,17 +7,19 @@
 # christian.werner@senckenberg.de
 """ldndc2nc.ldndc2nc: provides entry point main()."""
 
+import calendar
 import glob
 import os
-import pprint
 import re
 import sys
 import datetime as dt
 from collections import OrderedDict
 from optparse import OptionParser
 
+import numpy as np
 import pandas as pd
 import param
+import xarray as xr
 
 from .extra import Extra, get_config
 
@@ -26,9 +28,8 @@ __version__ = "0.0.1"
 # __version__ = param.Version(release=(0,0,1), fpath=__file__,
 #                            commit="$Format:%h$", reponame='ldndc2nc')
 
-# default attributes for netCDF variable
+# default attributes for netCDF variable of dataarrays
 defaultAttrsDA = {'_FillValue': -9999, 'missing_value': -9999}
-
 
 # functions
 def _split_colname(colname):
@@ -170,22 +171,22 @@ def read_ldndc_txt(inpath, varData, limiter):
                 Dids[fno] = sorted(list(OrderedDict.fromkeys(df['id'])))
 
             df = _limit_years(YEARS, df)
-            df = df.sort(basecols)
+            df = df.sort_values(by=basecols)
 
             # calculate full table length ids * dates
-            expected_len_df = len(Dids[fid]) * len(dates_in_file)
+
+            daterange_file = list(_daterange(
+                dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
+
+            expected_len_df = len(Dids[fno]) * len(daterange_file)
             actual_len_df = len(df)
 
             if actual_len_df < expected_len_df:
-
-                daterange_file = list(_daterange(
-                    dt.date(YEARS[0], 1, 1), dt.date(YEARS[-1] + 1, 1, 1)))
-
                 basecoldata = [(0, d.year, d.timetuple().tm_yday)
                                for d in daterange_file]
 
                 df_ref_all = []
-                for id in Dids[fid]:
+                for id in Dids[fno]:
                     df_ref = pd.DataFrame(basecoldata, columns=basecols)
                     df_ref.id = id
                     df_ref_all.append(df_ref)
@@ -197,7 +198,8 @@ def read_ldndc_txt(inpath, varData, limiter):
                 df = df.fillna(0.0)
                 df.reset_index()
 
-            df = df.sort(basecols)
+            df = df.sort_values(by=basecols)
+            dfs.append(df)
 
         # we don't have any dataframes, return
         if len(dfs) == 0:
@@ -207,7 +209,7 @@ def read_ldndc_txt(inpath, varData, limiter):
         df = pd.concat(dfs, axis=0)
         df.set_index(['id', 'year', 'julianday'], inplace=True)
 
-        for v in varData[ldndc_txt_file]:
+        for v in varData[ldndc_file_type]:
 
             if _is_composite_var(v):
                 new_colname, src_colnames = v
@@ -216,12 +218,12 @@ def read_ldndc_txt(inpath, varData, limiter):
                 df[new_colname] = df[src_colnames].sum(axis=1)
 
                 # drop original columns if they are not explicitly requested
-                for v2 in varData[ldndc_txt_file]:
+                for v2 in varData[ldndc_file_type]:
                     if not _is_composite_var(v2):
                         if v2 in src_colnames:
                             drop_colnames.append(v2)
 
-                df.drop(drop_names, axis=1)
+                df.drop(drop_colnames, axis=1)
 
         # TODO check why we have this line
         df = df[~df.index.duplicated(keep='first')]
@@ -267,7 +269,7 @@ LandscapeDNDC txt output files
 
     parser.add_option("-o",
                       "--outfile",
-                      dest="outname",
+                      dest="outfile",
                       default="outfile.nc",
                       help="name of the output netCDF file (def:outfile.nc)")
 
@@ -301,8 +303,8 @@ def main():
     # get command line args and options
     options, args = cli()
 
-    INPATH = args[0]
-    OUTPATH = args[1]
+    inpath  = args[0]
+    outpath = args[1]
 
     # parse rcfile
     cfg = get_config(options.config)
@@ -310,7 +312,6 @@ def main():
         print 'No ldndc2nc.conf file found in the required places... exit'
         exit(1)
 
-    inpath = '.'
     varData = cfg.variables
     limiter = ''  # restrict files by this string
 
@@ -318,8 +319,11 @@ def main():
     varnames, df = read_ldndc_txt(inpath, cfg.variables, limiter)
 
     NODATA = -9999
-    PATHREFDATA = '.'
+
+    # TODO read from external conf file or cmd parameter
+    PATHREFDATA='/Users/cwerner/Documents/projects/vietnam/refdata'
     REFNC = 'VN_MISC4.nc'
+    SPLIT = True
 
     # read sim ids from reference file
     with (xr.open_dataset(os.path.join(PATHREFDATA, REFNC))) as refnc:
@@ -379,6 +383,7 @@ def main():
                                   freq='D',
                                   periods=zsize,
                                   tz=None)
+
             for vname in varnames:
                 name, units = _split_colname(vname)
                 da = xr.DataArray(data[vname],
@@ -396,13 +401,15 @@ def main():
                 ds[vname] = da
 
             # write netcdf file
-            ds.attrs.update(defaultAttrsDS)
+            # TODO enable, read info from ldndc.conf
+            #ds.attrs.update(defaultAttrsDS)
+            outfilename = options.outfile
+
+            if SPLIT:
+                outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
+
             ds.to_netcdf(
-                os.path.join(OUTPATH, options.outfile),
+                os.path.join(outpath, options.outfile),
                 format='NETCDF4_CLASSIC')
 
             ds.close()
-
-
-class Boo(Extra):
-    pass
