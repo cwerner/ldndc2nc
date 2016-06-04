@@ -106,9 +106,7 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
 
     if limiter is not None:
         infiles = [x for x in infiles if limiter in os.path.basename(x)]
-        print 'Limited files by %s:' % limiter
-        print '\n'.join( infiles )
-    
+
     infiles.sort()
 
     if len(infiles) == 0:
