@@ -106,7 +106,9 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
 
     if limiter is not None:
         infiles = [x for x in infiles if limiter in os.path.basename(x)]
-
+        print 'Limited files by %s:' % limiter
+        print '\n'.join( infiles )
+    
     infiles.sort()
 
     if len(infiles) == 0:
@@ -144,7 +146,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         dfs = []
         datacols = []
 
-        infiles = _select_files(inpath, ldndc_file_type)
+        infiles = _select_files(inpath, ldndc_file_type, limiter=limiter)
 
         # special treatment for tuple entries in varData
         for v in varData[ldndc_file_type]:
@@ -282,6 +284,15 @@ LandscapeDNDC txt output files
         default=None,
         help="use specific ldndc2nc config file, otherwise look in default locations")
 
+
+    parser.add_option(
+        "-l",
+        "--limit",
+        dest="limiter",
+        default='',
+        help="limit files by this pattern in indir")
+
+
     (options, args) = parser.parse_args()
 
     if len(args) != 2:
@@ -315,7 +326,7 @@ def main():
     cfg = get_config(options.config)
 
     # read source output from ldndc
-    varnames, df = read_ldndc_txt(inpath, cfg.variables, years)
+    varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
 
     # TODO read from external conf file or cmd parameter
     PATHREFDATA = '/Users/cwerner/Documents/projects/vietnam/refdata'
