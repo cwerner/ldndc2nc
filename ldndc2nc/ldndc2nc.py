@@ -22,7 +22,7 @@ import pandas as pd
 import param
 import xarray as xr
 
-from .extra import get_config
+from .extra import get_config, parse_config
 
 __version__ = "0.0.1"
 

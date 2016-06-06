@@ -58,7 +58,24 @@ def _parse_config(cfgFile):
     return cfg
 
 
-def _parse_refdata(cfg):
+def _check_section(section):
+    print section
+    exit(1)
+
+
+def parse_config(cfg, section=''):
+    """ parse config data structure, return data of required section """
+
+    valid_sections = ['info', 'project', 'variables', 'refdata']
+
+    if section in valid_sections:
+        data = cfg[section]
+        
+        print data
+
+        return cfg
+
+
     print cfg
 
 
