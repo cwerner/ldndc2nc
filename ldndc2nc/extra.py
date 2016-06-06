@@ -70,7 +70,7 @@ def parse_config(cfg, section=''):
 
     if section in valid_sections:
         data = cfg[section]
-        
+
         print data
 
         return cfg

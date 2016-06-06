@@ -364,6 +364,9 @@ def main():
         else:
             print "Reffile %s not found."
             exit(1)
+    else:
+        # use reffile from conf
+        parse_config(cfg, section='refdata')
 
     # read source output from ldndc
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
