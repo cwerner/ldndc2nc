@@ -97,8 +97,8 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
     
         :param str inpath: path where files are located
         :param str ldndc_file_type: LandscapeDNDC txt filename pattern (i.e. soilcheistry-daily.txt)
-        :param str limiter: (optionally) limit selection with this expression
-        :return: list of matching LandscapeDNDC txt files
+        :param str limiter: (optional) limit selection using this expression
+        :return: list of matching LandscapeDNDC txt files in indir
         :rtype: list
     """
     infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
