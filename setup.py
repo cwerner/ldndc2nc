@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from setuptools import setup, find_packages
+from setuptools.command.test import test as TestCommand
+
 from codecs import open
 from os import path
 import re
@@ -34,23 +36,40 @@ install_requires = [x.strip() for x in all_reqs if 'git+' not in x]
 dependency_links = [x.strip().replace('git+', '') for x in all_reqs
                     if 'git+' not in x]
 
+
+class PyTest(TestCommand):
+    def finalize_options(self):
+        TestCommand.finalize_options(self)
+        self.test_args = []
+        self.test_suite = True
+
+    def run_tests(self):
+        import pytest
+        errcode = pytest.main(self.test_args)
+        sys.exit(errcode)
+
+
 setup(name='ldndc2nc',
       version=version,
       description='This package converts LandscapeDNDC output to netCDF files',
       long_description=long_descr,
-      entry_points={"console_scripts": ['ldndc2nc = ldndc2nc.ldndc2nc:main']},
       url='https://gitlab.com/cw_code/ldndc2nc',
-      download_url='https://gitlab.com/cw_code/ldndc2nc/tarball/' + version,
+      author='Christian Werner',
+      author_email='christian.werner@senckenberg.de',
       license='ND',
+      download_url='https://gitlab.com/cw_code/ldndc2nc/tarball/' + version,
       classifiers=[
           'Development Status :: 3 - Alpha',
-          'Intended Audience :: Developers',
+          'Intended Audience :: LandscapeDNDC scientists',
           'Programming Language :: Python :: 2',
       ],
-      keywords='',
-      packages=find_packages(exclude=['docs', 'tests*']),
-      include_package_data=True,
-      author='Christian Werner',
+      keywords='LandscapeDNDC postprocessing netcdf',
+      packages=find_packages(exclude=['docs', 'tests']),
       install_requires=install_requires,
-      dependency_links=dependency_links,
-      author_email='christian.werner@senckenberg.de')
+      extras_require={'test': ['pytest'], },
+      package_data={'ldndc2nc': ['data/ldndc2nc.conf']},
+      include_package_data=True,
+      entry_points={'console_scripts': ['ldndc2nc=ldndc2nc.ldndc2nc:main']},
+      test_suite='ldndc2nc.test.test_ldndc2nc',
+      cmdclass={'test': PyTest},
+      dependency_links=dependency_links)
