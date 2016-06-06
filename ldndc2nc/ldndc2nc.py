@@ -97,8 +97,8 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
     
         :param str inpath: path where files are located
         :param str ldndc_file_type: LandscapeDNDC txt filename pattern (i.e. soilcheistry-daily.txt)
-        :param str limiter: (optionally) limit selection with this expression
-        :return: list of matching LandscapeDNDC txt files
+        :param str limiter: (optional) limit selection using this expression
+        :return: list of matching LandscapeDNDC txt files in indir
         :rtype: list
     """
     infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
@@ -276,6 +276,13 @@ LandscapeDNDC txt output files
         help="name of the output netCDF file (def:outfile.nc)")
 
     parser.add_option(
+        "-r",
+        "--refnc",
+        dest="refinfo",
+        default="",
+        help="reference nc file (syntax: filename.nc,cidvar)")
+
+    parser.add_option(
         "-s",
         "--split",
         dest="split",
@@ -338,18 +345,28 @@ def main():
             print 'You need to pass a valid config file with the -c option.'
             exit(1)
 
+    if options.refinfo != "":
+        # use cli-specified refnc file
+        try:
+            refname, refvar = options.refinfo.split(',')
+        except:
+            print "Error"
+            raise
+
+        if os.path.isfile( refname ):
+            with (xr.open_dataset( refname )) as refnc:
+                if refvar not in refnc.data_vars:
+                    print "Reffile cell id variable <%s> not found in file\n%s" % (refvar, refname)
+                    exit(1)
+                ids = refnc[refvar].values
+                lats = refnc['lat'].values
+                lons = refnc['lon'].values
+        else:
+            print "Reffile %s not found."
+            exit(1)
+
     # read source output from ldndc
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
-
-    # TODO read from external conf file or cmd parameter
-    PATHREFDATA = '/Users/cwerner/Documents/projects/vietnam/refdata'
-    REFNC = 'VN_MISC4.nc'
-
-    # read sim ids from reference file
-    with (xr.open_dataset(os.path.join(PATHREFDATA, REFNC))) as refnc:
-        ids = refnc['cid'].values
-        lats = refnc['lat'].values
-        lons = refnc['lon'].values
 
     idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
     jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
