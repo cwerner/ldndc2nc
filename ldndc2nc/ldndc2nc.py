@@ -269,11 +269,12 @@ LandscapeDNDC txt output files
         default="2000-2015",
         help="give the range of years to consider (def:2000-2015)")
 
-    parser.add_option("-o",
-                      "--outfile",
-                      dest="outfile",
-                      default="outfile.nc",
-                      help="name of the output netCDF file (def:outfile.nc)")
+    parser.add_option(
+        "-o",
+        "--outfile",
+        dest="outfile",
+        default="outfile.nc",
+        help="name of the output netCDF file (def:outfile.nc)")
 
     parser.add_option(
         "-c",
@@ -282,6 +283,13 @@ LandscapeDNDC txt output files
         default=None,
         help="use specific ldndc2nc config file, otherwise look in default locations")
 
+    parser.add_option(
+        "-s",
+        "--store-config",
+        dest="storeconfig",
+        action='store_true',
+        default=False,
+        help="make the passed config file the new default")
 
     parser.add_option(
         "-l",
@@ -322,6 +330,14 @@ def main():
 
     # read config
     cfg = get_config(options.config)
+
+    # store it
+    if options.storeconfig:
+        if options.config is not None:
+            set_config( cfg )
+        else:
+            print 'You need to pass a valid config file with the -c option.'
+            exit(1)
 
     # read source output from ldndc
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)

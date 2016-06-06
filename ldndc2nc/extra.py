@@ -82,3 +82,10 @@ def get_config(cfgFile=None):
     cfg = _parse_config(cfgFile)
 
     return cfg
+
+
+def set_config(cfg):
+    fname = os.path.join( os.path.expanduser("~"), 'ldndc2nc.conf')
+    with open(fname, 'w') as f:
+        f.write( yaml.dump(cfg, default_flow_style=False))
+
