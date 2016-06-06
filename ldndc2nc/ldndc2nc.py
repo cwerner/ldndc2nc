@@ -284,7 +284,7 @@ LandscapeDNDC txt output files
         help="use specific ldndc2nc config file, otherwise look in default locations")
 
     parser.add_option(
-        "-s",
+        "-S",
         "--store-config",
         dest="storeconfig",
         action='store_true',
