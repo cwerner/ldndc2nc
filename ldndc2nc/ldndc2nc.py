@@ -63,6 +63,11 @@ def _daterange(start_date, end_date):
     for n in range(int((end_date - start_date).days)):
         yield start_date + dt.timedelta(n)
 
+def _ndays(yr):
+    ndays = 365
+    if calendar.isleap(yr):
+        ndays = 366
+    return ndays
 
 def _is_composite_var(v):
     return type(v) == tuple
@@ -382,74 +387,73 @@ def main():
             if np.isnan(ids[i, j]) == False:
                 Dlut[int(ids[i, j])] = (idx[i, j], jdx[i, j])
 
-    if options.split:
-        print " Splitting into yearly chucks"
+    ds_all = []
 
-        # loop group-wise (group: year)
-        for yr, yr_group in df.groupby('year'):
+    for yr, yr_group in df.groupby('year'):
+        
+        data = {}
 
-            data = {}
-            zsize = 365
-            if calendar.isleap(yr): zsize = 366
+        for vname in varnames:
+            data[vname] = np.ma.ones((_ndays(yr), len(ids), len(ids[0]))) * NODATA
+            data[vname][:] = np.ma.masked
 
-            for vname in varnames:
-                data[vname] = np.ma.ones((zsize, len(ids), len(ids[0])
-                                          )) * NODATA
-                data[vname][:] = np.ma.masked
+        # loop group-wise (group: id)
+        for id, id_group in yr_group.groupby('id'):
 
-            # loop group-wise (group: id)
-            for id, id_group in yr_group.groupby('id'):
-
-                idx, jdx = Dlut[id]  # get cell position in array
-
-                for vname in varnames:
-                    # check for incomplete year data, fill with nodata value till end of year
-                    if len(id_group[vname]) < len(data[vname][:, 0, 0]):
-                        missingvals = zsize - len(id_group[vname])
-                        dslice = np.concatenate(id_group[vname],
-                                                np.asarray([NODATA] *
-                                                           missingvals))
-                        print len(dslice)
-                    else:
-                        dslize = id_group[vname]
-
-                    data[vname][:, jdx, idx] = dslize
-
-            # create an empty netcdf dataset
-            ds = xr.Dataset()
-
-            # loop over variables and add those the netcdf file
-            times = pd.date_range('%s-01-01' % yr,
-                                  freq='D',
-                                  periods=zsize,
-                                  tz=None)
+            idx, jdx = Dlut[id]  # get cell position in array
 
             for vname in varnames:
-                name, units = _split_colname(vname)
-                da = xr.DataArray(data[vname],
-                                  coords=[('time', times), ('lat', lats),
-                                          ('lon', lons)])
-                da.name = name
-                da.attrs.update(defaultAttrsDA)
-                da.attrs['units'] = units
+                # check for incomplete year data, fill with nodata value till end of year
+                if len(id_group[vname]) < len(data[vname][:, 0, 0]):
+                    missingvals = _ndays(yr) - len(id_group[vname])
+                    dslice = np.concatenate(id_group[vname],
+                                            np.asarray([NODATA] *
+                                                       missingvals))
+                    print len(dslice)
+                else:
+                    dslize = id_group[vname]
 
-                # more optimization for faster netcdfs !!!
-                da.encoding.update({'complevel': 5,
-                                    'zlib': True,
-                                    'chunksizes': (10, 40, 20),
-                                    'shuffle': True})  # add compression
-                ds[name] = da
+                data[vname][:, jdx, idx] = dslize
 
-            # write netcdf file
-            # TODO enable, read info from ldndc.conf
-            #ds.attrs.update(defaultAttrsDS)
-            outfilename = options.outfile
+        # create an empty netcdf dataset
+        ds = xr.Dataset()
 
-            if options.split:
-                outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
+        # loop over variables and add those the netcdf file
+        times = pd.date_range('%s-01-01' % yr,
+                              freq='D',
+                              periods=_ndays(yr),
+                              tz=None)
+
+        for vname in varnames:
+            name, units = _split_colname(vname)
+            da = xr.DataArray(data[vname],
+                              coords=[('time', times), ('lat', lats),
+                                      ('lon', lons)])
+            da.name = name
+            da.attrs.update(defaultAttrsDA)
+            da.attrs['units'] = units
+
+            # more optimization for faster netcdfs !!!
+            da.encoding.update({'complevel': 5,
+                                'zlib': True,
+                                'chunksizes': (10, 40, 20),
+                                'shuffle': True})  # add compression
+            ds[name] = da
+
+        if options.split:
+            outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
 
             ds.to_netcdf(
                 os.path.join(outpath, outfilename),
                 format='NETCDF4_CLASSIC')
-
             ds.close()
+        else:
+            ds_all.append( ds )
+
+    if not options.split:
+        ds = xr.concat(ds_all, dim='time')
+        ds.to_netcdf(
+            os.path.join(outpath, outfilename),
+            format='NETCDF4_CLASSIC')
+        ds.close()
+
