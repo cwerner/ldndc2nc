@@ -58,6 +58,11 @@ def _parse_config(cfgFile):
     return cfg
 
 
+def _parse_refdata(cfg):
+    print cfg
+
+
+
 def get_config(cfgFile=None):
     """ locate and read config file """
 
