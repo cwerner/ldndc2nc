@@ -255,19 +255,18 @@ LandscapeDNDC txt output files
 """)
 
     parser.add_option(
-        "-s",
-        "--split",
-        dest="split",
-        action='store_true',
-        default=False,
-        help="split output in yearly netCDF files with daily resolution")
+        "-c",
+        "--config",
+        dest="config",
+        default=None,
+        help="use specific ldndc2nc config file, otherwise look in default locations")
 
     parser.add_option(
-        "-y",
-        "--years",
-        dest="years",
-        default="2000-2015",
-        help="give the range of years to consider (def:2000-2015)")
+        "-l",
+        "--limit",
+        dest="limiter",
+        default='',
+        help="limit files by this pattern in indir")
 
     parser.add_option(
         "-o",
@@ -277,11 +276,12 @@ LandscapeDNDC txt output files
         help="name of the output netCDF file (def:outfile.nc)")
 
     parser.add_option(
-        "-c",
-        "--config",
-        dest="config",
-        default=None,
-        help="use specific ldndc2nc config file, otherwise look in default locations")
+        "-s",
+        "--split",
+        dest="split",
+        action='store_true',
+        default=False,
+        help="split output in yearly netCDF files with daily resolution")
 
     parser.add_option(
         "-S",
@@ -292,12 +292,11 @@ LandscapeDNDC txt output files
         help="make the passed config file the new default")
 
     parser.add_option(
-        "-l",
-        "--limit",
-        dest="limiter",
-        default='',
-        help="limit files by this pattern in indir")
-
+        "-y",
+        "--years",
+        dest="years",
+        default="2000-2015",
+        help="give the range of years to consider (def:2000-2015)")
 
     (options, args) = parser.parse_args()
 
