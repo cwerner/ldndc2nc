@@ -2,13 +2,17 @@
 """ldndc2nc.extra: extra module within the ldndc2nc package."""
 
 import os
-import shutil
-import yaml
-from dotmap import DotMap
 from pkg_resources import Requirement, resource_filename
+import shutil
+
+import yaml
 
 
 def _copy_default_config():
+    """ copy default conf file to user dir """
+
+    #TODO somewhat redundand, merge with set_config code
+
     fname = resource_filename(
         Requirement.parse("ldndc2nc"), "ldndc2nc/data/ldndc2nc.conf")
     shutil.copyfile(fname, os.path.join(
@@ -36,11 +40,10 @@ def _parse_config(cfgFile):
 
     with open(cfgFile, 'r') as ymlfile:
         cfg = yaml.load(ymlfile)
-        cfg = DotMap(cfg)
+        
+    #cfg.variables = cfg.variables.toDict()
 
-    cfg.variables = cfg.variables.toDict()
-
-    for k, vs in cfg.variables.items():
+    for k, vs in cfg['variables'].items():
         vs_new = []
         for v in vs:
 
@@ -53,7 +56,7 @@ def _parse_config(cfgFile):
             else:
                 vs_new.append(v)
 
-            cfg.variables[k] = vs_new
+            cfg['variables'][k] = vs_new
 
     return cfg
 
@@ -107,6 +110,7 @@ def get_config(cfgFile=None):
 
 
 def set_config(cfg):
+    """ write cfg file to user dir """
     fname = os.path.join( os.path.expanduser("~"), 'ldndc2nc.conf')
     with open(fname, 'w') as f:
         f.write( yaml.dump(cfg, default_flow_style=False))

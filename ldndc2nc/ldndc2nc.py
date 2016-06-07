@@ -374,7 +374,7 @@ def main():
         parse_config(cfg, section='refdata')
 
     # read source output from ldndc
-    varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
+    varnames, df = read_ldndc_txt(inpath, cfg['variables'], years, limiter=options.limiter)
 
     idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
     jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
