@@ -63,6 +63,11 @@ def _daterange(start_date, end_date):
     for n in range(int((end_date - start_date).days)):
         yield start_date + dt.timedelta(n)
 
+def _ndays(yr):
+    ndays = 365
+    if calendar.isleap(yr):
+        ndays = 366
+    return ndays
 
 def _is_composite_var(v):
     return type(v) == tuple
@@ -97,8 +102,8 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
     
         :param str inpath: path where files are located
         :param str ldndc_file_type: LandscapeDNDC txt filename pattern (i.e. soilcheistry-daily.txt)
-        :param str limiter: (optionally) limit selection with this expression
-        :return: list of matching LandscapeDNDC txt files
+        :param str limiter: (optional) limit selection using this expression
+        :return: list of matching LandscapeDNDC txt files in indir
         :rtype: list
     """
     infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
@@ -255,33 +260,11 @@ LandscapeDNDC txt output files
 """)
 
     parser.add_option(
-        "-s",
-        "--split",
-        dest="split",
-        action='store_true',
-        default=False,
-        help="split output in yearly netCDF files with daily resolution")
-
-    parser.add_option(
-        "-y",
-        "--years",
-        dest="years",
-        default="2000-2015",
-        help="give the range of years to consider (def:2000-2015)")
-
-    parser.add_option("-o",
-                      "--outfile",
-                      dest="outfile",
-                      default="outfile.nc",
-                      help="name of the output netCDF file (def:outfile.nc)")
-
-    parser.add_option(
         "-c",
         "--config",
         dest="config",
         default=None,
         help="use specific ldndc2nc config file, otherwise look in default locations")
-
 
     parser.add_option(
         "-l",
@@ -290,6 +273,42 @@ LandscapeDNDC txt output files
         default='',
         help="limit files by this pattern in indir")
 
+    parser.add_option(
+        "-o",
+        "--outfile",
+        dest="outfile",
+        default="outfile.nc",
+        help="name of the output netCDF file (def:outfile.nc)")
+
+    parser.add_option(
+        "-r",
+        "--refnc",
+        dest="refinfo",
+        default="",
+        help="reference nc file (syntax: filename.nc,cidvar)")
+
+    parser.add_option(
+        "-s",
+        "--split",
+        dest="split",
+        action='store_true',
+        default=False,
+        help="split output in yearly netCDF files with daily resolution")
+
+    parser.add_option(
+        "-S",
+        "--store-config",
+        dest="storeconfig",
+        action='store_true',
+        default=False,
+        help="make the passed config file the new default")
+
+    parser.add_option(
+        "-y",
+        "--years",
+        dest="years",
+        default="2000-2015",
+        help="give the range of years to consider (def:2000-2015)")
 
     (options, args) = parser.parse_args()
 
@@ -323,18 +342,36 @@ def main():
     # read config
     cfg = get_config(options.config)
 
+    # store it
+    if options.storeconfig:
+        if options.config is not None:
+            set_config( cfg )
+        else:
+            print 'You need to pass a valid config file with the -c option.'
+            exit(1)
+
+    if options.refinfo != "":
+        # use cli-specified refnc file
+        try:
+            refname, refvar = options.refinfo.split(',')
+        except:
+            print "Error"
+            raise
+
+        if os.path.isfile( refname ):
+            with (xr.open_dataset( refname )) as refnc:
+                if refvar not in refnc.data_vars:
+                    print "Reffile cell id variable <%s> not found in file\n%s" % (refvar, refname)
+                    exit(1)
+                ids = refnc[refvar].values
+                lats = refnc['lat'].values
+                lons = refnc['lon'].values
+        else:
+            print "Reffile %s not found."
+            exit(1)
+
     # read source output from ldndc
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
-
-    # TODO read from external conf file or cmd parameter
-    PATHREFDATA = '/Users/cwerner/Documents/projects/vietnam/refdata'
-    REFNC = 'VN_MISC4.nc'
-
-    # read sim ids from reference file
-    with (xr.open_dataset(os.path.join(PATHREFDATA, REFNC))) as refnc:
-        ids = refnc['cid'].values
-        lats = refnc['lat'].values
-        lons = refnc['lon'].values
 
     idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
     jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
@@ -347,74 +384,73 @@ def main():
             if np.isnan(ids[i, j]) == False:
                 Dlut[int(ids[i, j])] = (idx[i, j], jdx[i, j])
 
-    if options.split:
-        print " Splitting into yearly chucks"
+    ds_all = []
 
-        # loop group-wise (group: year)
-        for yr, yr_group in df.groupby('year'):
+    for yr, yr_group in df.groupby('year'):
+        
+        data = {}
 
-            data = {}
-            zsize = 365
-            if calendar.isleap(yr): zsize = 366
+        for vname in varnames:
+            data[vname] = np.ma.ones((_ndays(yr), len(ids), len(ids[0]))) * NODATA
+            data[vname][:] = np.ma.masked
 
-            for vname in varnames:
-                data[vname] = np.ma.ones((zsize, len(ids), len(ids[0])
-                                          )) * NODATA
-                data[vname][:] = np.ma.masked
+        # loop group-wise (group: id)
+        for id, id_group in yr_group.groupby('id'):
 
-            # loop group-wise (group: id)
-            for id, id_group in yr_group.groupby('id'):
-
-                idx, jdx = Dlut[id]  # get cell position in array
-
-                for vname in varnames:
-                    # check for incomplete year data, fill with nodata value till end of year
-                    if len(id_group[vname]) < len(data[vname][:, 0, 0]):
-                        missingvals = zsize - len(id_group[vname])
-                        dslice = np.concatenate(id_group[vname],
-                                                np.asarray([NODATA] *
-                                                           missingvals))
-                        print len(dslice)
-                    else:
-                        dslize = id_group[vname]
-
-                    data[vname][:, jdx, idx] = dslize
-
-            # create an empty netcdf dataset
-            ds = xr.Dataset()
-
-            # loop over variables and add those the netcdf file
-            times = pd.date_range('%s-01-01' % yr,
-                                  freq='D',
-                                  periods=zsize,
-                                  tz=None)
+            idx, jdx = Dlut[id]  # get cell position in array
 
             for vname in varnames:
-                name, units = _split_colname(vname)
-                da = xr.DataArray(data[vname],
-                                  coords=[('time', times), ('lat', lats),
-                                          ('lon', lons)])
-                da.name = name
-                da.attrs.update(defaultAttrsDA)
-                da.attrs['units'] = units
+                # check for incomplete year data, fill with nodata value till end of year
+                if len(id_group[vname]) < len(data[vname][:, 0, 0]):
+                    missingvals = _ndays(yr) - len(id_group[vname])
+                    dslice = np.concatenate(id_group[vname],
+                                            np.asarray([NODATA] *
+                                                       missingvals))
+                    print len(dslice)
+                else:
+                    dslize = id_group[vname]
 
-                # more optimization for faster netcdfs !!!
-                da.encoding.update({'complevel': 5,
-                                    'zlib': True,
-                                    'chunksizes': (10, 40, 20),
-                                    'shuffle': True})  # add compression
-                ds[name] = da
+                data[vname][:, jdx, idx] = dslize
 
-            # write netcdf file
-            # TODO enable, read info from ldndc.conf
-            #ds.attrs.update(defaultAttrsDS)
-            outfilename = options.outfile
+        # create an empty netcdf dataset
+        ds = xr.Dataset()
 
-            if options.split:
-                outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
+        # loop over variables and add those the netcdf file
+        times = pd.date_range('%s-01-01' % yr,
+                              freq='D',
+                              periods=_ndays(yr),
+                              tz=None)
+
+        for vname in varnames:
+            name, units = _split_colname(vname)
+            da = xr.DataArray(data[vname],
+                              coords=[('time', times), ('lat', lats),
+                                      ('lon', lons)])
+            da.name = name
+            da.attrs.update(defaultAttrsDA)
+            da.attrs['units'] = units
+
+            # more optimization for faster netcdfs !!!
+            da.encoding.update({'complevel': 5,
+                                'zlib': True,
+                                'chunksizes': (10, 40, 20),
+                                'shuffle': True})  # add compression
+            ds[name] = da
+
+        if options.split:
+            outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
 
             ds.to_netcdf(
                 os.path.join(outpath, outfilename),
                 format='NETCDF4_CLASSIC')
-
             ds.close()
+        else:
+            ds_all.append( ds )
+
+    if not options.split:
+        ds = xr.concat(ds_all, dim='time')
+        ds.to_netcdf(
+            os.path.join(outpath, outfilename),
+            format='NETCDF4_CLASSIC')
+        ds.close()
+
