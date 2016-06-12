@@ -8,12 +8,13 @@
 """ldndc2nc.ldndc2nc: provides entry point main()."""
 
 import calendar
+import datetime as dt
 import glob
+import logging
 import os
 import re
 import string
 import sys
-import datetime as dt
 from collections import OrderedDict
 from optparse import OptionParser
 
@@ -28,6 +29,9 @@ __version__ = "0.0.1"
 
 # __version__ = param.Version(release=(0,0,1), fpath=__file__,
 #                            commit="$Format:%h$", reponame='ldndc2nc')
+
+# start logger
+log = logging.getLogger(__name__) 
 
 NODATA = -9999
 
@@ -91,13 +95,12 @@ def _extract_fileno(fname):
     elif len(x) == 1:
         fileno = int(x[0])
     else:
-        print 'Multiple matches! This should not be.'
-        print fname
-        raise
+        log.critical("Multiple matches! fname: %s" % fname)
+        exit(1)
     return fileno
 
 
-def _select_files(inpath, ldndc_file_type, limiter=None):
+def _select_files(inpath, ldndc_file_type, limiter=""):
     """ find all ldndc outfiles of given type from inpath (limit using limiter)
     
         :param str inpath: path where files are located
@@ -109,17 +112,18 @@ def _select_files(inpath, ldndc_file_type, limiter=None):
     infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
     infiles = glob.glob(infile_pattern)
 
-    if limiter is not None:
+    if limiter != "":
         infiles = [x for x in infiles if limiter in os.path.basename(x)]
 
     infiles.sort()
 
     if len(infiles) == 0:
-        print '\nNo LDNDC output files of type "%s"' % ldndc_file_type
-        print 'Input directory:', inpath
-        print 'Pattern used:   ', infile_pattern
-        if limiter is not None:
-            print 'Filter used:', limiter
+        msg  = "No LandscapeDNDC input files of type <%s>\n" % ldndc_file_type
+        msg += "Input dir:    %s\n" % inpath
+        msg += "Pattern used: %s"   % infile_pattern
+        if limiter != "":
+            msg += "\nFilter used:  %s" % limiter
+        log.critical(msg)
         exit(1)
 
     return infiles
@@ -237,7 +241,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         df_all.append(df)
 
     # check if all tables have the same number of rows
-    print [len(x) for x in df_all]
+    log.info("Data table length: %s" % ','.join([len(x) for x in df_all]))
 
     df = pd.concat(df_all, axis=1)
     df.reset_index(inplace=True)
@@ -253,7 +257,7 @@ class MyParser(OptionParser):
 def cli():
     """ command line interface """
 
-    parser = MyParser( "usage: %prog [options] indir outdir", \
+    parser = MyParser( "%prog [options] indir outdir", \
             epilog="""
 Use this tool to create netCDF files based on standard
 LandscapeDNDC txt output files
@@ -304,6 +308,13 @@ LandscapeDNDC txt output files
         help="make the passed config file the new default")
 
     parser.add_option(
+        "-v", 
+        "--verbose",
+        dest="verbose",
+        action="store_true",        
+        help="increase output verbosity")
+    
+    parser.add_option(
         "-y",
         "--years",
         dest="years",
@@ -312,23 +323,33 @@ LandscapeDNDC txt output files
 
     (options, args) = parser.parse_args()
 
+    # parse some basic options
     if len(args) != 2:
-        print "\nYou need to specify an input and output directory.\nExiting...\n"
+        log.critical("You need give input and output dirs.")
         parser.print_help()
         exit(1)
+
+    if options.verbose:
+        handlers = logging.getLogger().handlers
+        for handler in handlers:
+            if type(handler) is logging.StreamHandler:
+                handler.setLevel(logging.DEBUG)
 
     return (options, args)
 
 
 def greetScreen():
 
-    header = """ldndc2nc :: LandscapeDNDC output converter (v%s)""" % __version__
+    header = """ldndc2nc :: LandscapeDNDC output converter (v%s)\n""" % __version__
     print(header)
+    log.debug('-' * 50)
+    log.debug('ldndc2nc called at: %s' % dt.datetime.now())
 
 
 def main():
 
     greetScreen()
+
 
     # process command line args and options
     options, args = cli()
@@ -347,7 +368,7 @@ def main():
         if options.config is not None:
             set_config( cfg )
         else:
-            print 'You need to pass a valid config file with the -c option.'
+            log.critical("Options -S requires that you pass a file with -c.")
             exit(1)
 
     if options.refinfo != "":
@@ -355,20 +376,23 @@ def main():
         try:
             refname, refvar = options.refinfo.split(',')
         except:
-            print "Error"
-            raise
+            log.critical("Specified refinfo not valid: %s" % options.refinfo)
+            exit(1)
 
         if os.path.isfile( refname ):
             with (xr.open_dataset( refname )) as refnc:
                 if refvar not in refnc.data_vars:
-                    print "Reffile cell id variable <%s> not found in file\n%s" % (refvar, refname)
+                    log.critical("CellID variable <%s> not found in %s." % (refvar, refname))
                     exit(1)
                 ids = refnc[refvar].values
                 lats = refnc['lat'].values
                 lons = refnc['lon'].values
         else:
-            print "Reffile %s not found."
+            log.critical("Specified reffile %s not found" % refname)
             exit(1)
+    else:
+        log.critical('RefFile not specified. This is not handled yet.')
+        exit(1)
 
     # read source output from ldndc
     varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
@@ -406,13 +430,12 @@ def main():
                     dslice = np.concatenate(id_group[vname],
                                             np.asarray([NODATA] *
                                                        missingvals))
-                    print len(dslice)
+                    log.warn("Data length encountered shorter than expected!")
                 else:
                     dslize = id_group[vname]
 
                 data[vname][:, jdx, idx] = dslize
 
-        # create an empty netcdf dataset
         ds = xr.Dataset()
 
         # loop over variables and add those the netcdf file
@@ -438,7 +461,7 @@ def main():
             ds[name] = da
 
         if options.split:
-            outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
+            outfilename = options.outfile[:-3] + '_%d' % yr + '.nc'
 
             ds.to_netcdf(
                 os.path.join(outpath, outfilename),
@@ -450,7 +473,7 @@ def main():
     if not options.split:
         ds = xr.concat(ds_all, dim='time')
         ds.to_netcdf(
-            os.path.join(outpath, outfilename),
+            os.path.join(outpath, options.outfile),
             format='NETCDF4_CLASSIC')
         ds.close()
 

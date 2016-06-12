@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """ldndc2nc.extra: extra module within the ldndc2nc package."""
 
+import logging
 import os
-import shutil
-import yaml
-from dotmap import DotMap
 from pkg_resources import Requirement, resource_filename
+import shutil
 
+from dotmap import DotMap
+import yaml
+
+# start logger
+log = logging.getLogger(__name__) 
 
 def _copy_default_config():
     fname = resource_filename(
@@ -69,13 +73,13 @@ def get_config(cfgFile=None):
 
     if cfgfile_exists(cfgFile):
         if not os.path.isfile(cfgFile):
-            print "Specified configuration file not found."
+            log.critical("Specified configuration file not found.")
             exit(1)
     else:
         cfgFile = _find_config()
 
         if not cfgfile_exists(cfgFile):
-            print 'copying config file'
+            log.info("Copying config file")
             _copy_default_config()
             cfgFile = _find_config()
 
