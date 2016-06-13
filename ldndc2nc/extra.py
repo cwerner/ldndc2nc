@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """ldndc2nc.extra: extra module within the ldndc2nc package."""
 
+import logging
 import os
 from pkg_resources import Requirement, resource_filename
 import shutil
 
 import yaml
 
+# start logger
+log = logging.getLogger(__name__) 
 
 def _copy_default_config():
     """ copy default conf file to user dir """
@@ -69,19 +72,17 @@ def _check_section(section):
 def parse_config(cfg, section=''):
     """ parse config data structure, return data of required section """
 
-    valid_sections = ['info', 'project', 'variables', 'refdata']
+    def is_valid_section(s):
+        valid_sections = ['info', 'project', 'variables', 'refdata']
+        return s in valid_sections
 
-    if section in valid_sections:
-        data = cfg[section]
-
-        print data
-
-        return cfg
-
-
-    print cfg
-
-
+    cfg_data = None
+    if is_valid_section():
+        cfg_data = cfg[section]
+    else section not in valid_sections:
+        log.critical("Section <%s> not found in config" % section)
+        exit(1)
+    return cfg_data
 
 def get_config(cfgFile=None):
     """ locate and read config file """
@@ -94,13 +95,13 @@ def get_config(cfgFile=None):
 
     if cfgfile_exists(cfgFile):
         if not os.path.isfile(cfgFile):
-            print "Specified configuration file not found."
+            log.critical("Specified configuration file not found.")
             exit(1)
     else:
         cfgFile = _find_config()
 
         if not cfgfile_exists(cfgFile):
-            print 'copying config file'
+            log.info("Copying config file")
             _copy_default_config()
             cfgFile = _find_config()
 

@@ -2,6 +2,7 @@
 
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
+from setuptools.command.sdist import sdist as SDistCommand
 
 from codecs import open
 from os import path
@@ -48,6 +49,19 @@ class PyTest(TestCommand):
         errcode = pytest.main(self.test_args)
         sys.exit(errcode)
 
+class PyPack(SDistCommand):
+    description = "Custom sdist command, runs pandoc prior to building the sdist package"
+    def run(self):
+        try:
+            from pypandoc import convert
+            long_descr = convert(readme_file, 'rst', 'md')
+            with open(path.join(here, 'README.rst'), 'w', encoding='utf-8') as f:
+                f.write(long_descr)
+        except ImportError:
+            print("warning: pypandoc not found, could not convert Markdown to RST")
+            long_descr = open(readme_file).read()
+        SDistCommand.run(self)
+        
 
 setup(name='ldndc2nc',
       version=version,
@@ -71,5 +85,5 @@ setup(name='ldndc2nc',
       include_package_data=True,
       entry_points={'console_scripts': ['ldndc2nc=ldndc2nc.ldndc2nc:main']},
       test_suite='ldndc2nc.test.test_ldndc2nc',
-      cmdclass={'test': PyTest},
+      cmdclass={'test': PyTest, 'sdist': PyPack},
       dependency_links=dependency_links)
