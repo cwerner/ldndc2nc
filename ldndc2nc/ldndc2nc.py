@@ -369,7 +369,7 @@ def main():
                 if refvar not in refnc.data_vars:
                     log.critical("CellID variable <%s> not found in %s." % (refvar, refname))
                     exit(1)
-                ids = refnc[refvar].values
+                cell_ids = refnc[refvar].values
                 lats = refnc['lat'].values
                 lons = refnc['lon'].values
         else:
@@ -400,13 +400,26 @@ def main():
         latmax -= res * 0.5
 
         lons = np.arange(lonmin, lonmax+res, res)
-        lats = np.arange(latmin, latmax+res, res)
+        lats = np.arange(latmin, latmax+res, res)[::-1] # we go top to bottom
+
+        if formula != 'continuous':
+            log.debug("Using the following formula to compute cellids: %s" % formula)
 
         def _calc_cellid(j, i, method):
-            log.debug("Using the following eval formula to create cellids: %s" % formula)
-            print method
+            """ calculate cellid based on formula (using eval, with some validation) """
+            valid_chars = "xyij0123456789+*^"
+            safe_method = []
+            method = string.lower( string.replace(method, '^', '**') )
+            for c in method:
+                if c in valid_chars:
+                    safe_method.append(c)
+            return eval(''.join(safe_method))
 
         # create actual cellids
+
+        global_lons = np.arange(-180, 180+res, res)
+        global_lats = np.arange(-90, 90+res, res)[::-1]
+
         cell_ids = np.empty( (len(lats), len(lons)), np.int64 )
         for j, lat in enumerate(lats):
             for i, lon in enumerate(lons):
@@ -418,21 +431,17 @@ def main():
 
                 cell_ids[j,i] = cellid
 
+        # return cell_ids, lats, lons ( currently only local )
 
-
+        
     # read source output from ldndc
     varnames, df = read_ldndc_txt(args.INDIR, cfg['variables'], years, limiter=args.limiter)
 
-    idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
-    jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
-
-    # TODO make this nicer
-    # create lookup dictionary
     Dlut = {}
-    for i in range(len(ids)):
-        for j in range(len(ids[0])):
-            if np.isnan(ids[i, j]) == False:
-                Dlut[int(ids[i, j])] = (idx[i, j], jdx[i, j])
+    for j in range(len(cell_ids)):
+        for i in range(len(cell_ids[0])):
+            if np.isnan(cell_ids[j, i]) == False:
+                Dlut[int(cell_ids[j, i])] = (j,i)
 
     ds_all = []
 
@@ -441,13 +450,13 @@ def main():
         data = {}
 
         for vname in varnames:
-            data[vname] = np.ma.ones((_ndays(yr), len(ids), len(ids[0]))) * NODATA
+            data[vname] = np.ma.ones((_ndays(yr), len(cell_ids), len(cell_ids[0]))) * NODATA
             data[vname][:] = np.ma.masked
 
         # loop group-wise (group: id)
         for id, id_group in yr_group.groupby('id'):
 
-            idx, jdx = Dlut[id]  # get cell position in array
+            jdx, idx = Dlut[id]  # get cell position in array
 
             for vname in varnames:
                 # check for incomplete year data, fill with nodata value till end of year
