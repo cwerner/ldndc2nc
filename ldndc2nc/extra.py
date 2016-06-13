@@ -69,7 +69,7 @@ def _check_section(section):
     exit(1)
 
 
-def parse_config(cfg, section=''):
+def parse_config(cfg, section=None):
     """ parse config data structure, return data of required section """
 
     def is_valid_section(s):
@@ -77,10 +77,14 @@ def parse_config(cfg, section=''):
         return s in valid_sections
 
     cfg_data = None
-    if is_valid_section():
-        cfg_data = cfg[section]
+    if is_valid_section(section):
+        try:
+            cfg_data = cfg[section]
+        except KeyError:
+            log.critical("Section <%s> not found in config" % section)
+            exit(1)
     else:
-        log.critical("Section <%s> not found in config" % section)
+        log.critical("Section <%s> not a valid name" % section)
         exit(1)
     return cfg_data
 
