@@ -79,7 +79,7 @@ def parse_config(cfg, section=''):
     cfg_data = None
     if is_valid_section():
         cfg_data = cfg[section]
-    else section not in valid_sections:
+    else:
         log.critical("Section <%s> not found in config" % section)
         exit(1)
     return cfg_data

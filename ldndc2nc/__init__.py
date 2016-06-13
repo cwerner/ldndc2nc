@@ -14,8 +14,8 @@ logging.getLogger(__name__).addHandler(NullHandler())
 logPath='.'
 fileName='ldndc2nc'
 
-FORMAT = "%(asctime)s [%(levelname)-8s] %(message)s"
-DEBUG_FORMAT = FORMAT + " (%(filename)s:%(lineno)s)"
+CONSOLE_FORMAT = "[%(levelname)-8s] %(message)s"
+FILE_FORMAT    = "%(asctime)s [%(levelname)-8s] %(message)s (%(filename)s:%(lineno)s)"
 
 class MultiLineFormatter(logging.Formatter):
     """ A custom multi-line logging formatter """
@@ -25,19 +25,19 @@ class MultiLineFormatter(logging.Formatter):
         str = str.replace('\n', '\n' + ' '*len(header))
         return str
 
-logFormatter = MultiLineFormatter(FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
-logFormatterDebug = MultiLineFormatter(DEBUG_FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
+logFormatterConsole = MultiLineFormatter(CONSOLE_FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
+logFormatterFile    = MultiLineFormatter(FILE_FORMAT, datefmt='%Y-%m-%d %H:%M:%S')
 
 rootLogger = logging.getLogger()
 rootLogger.setLevel(logging.DEBUG)
 
 consoleHandler = logging.StreamHandler()
-consoleHandler.setFormatter(logFormatter)
+consoleHandler.setFormatter(logFormatterConsole)
 consoleHandler.setLevel(logging.INFO)
 rootLogger.addHandler(consoleHandler)
 
 fileHandler = RotatingFileHandler("{0}/{1}.log".format(logPath, fileName), maxBytes=10000)
-fileHandler.setFormatter(logFormatterDebug)
+fileHandler.setFormatter(logFormatterFile)
 fileHandler.setLevel(logging.DEBUG)
 rootLogger.addHandler(fileHandler)
 
