@@ -23,6 +23,7 @@ import pandas as pd
 import param
 import xarray as xr
 
+from .cli import cli
 from .extra import get_config, parse_config, RefDataBuilder
 
 __version__ = "0.0.2"
@@ -128,10 +129,11 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
 
 def _limit_years(years, df, yearcol='year'):
     """ limit data.frame to specified years """
-    if years[-1] - years[0] == len(years) - 1:
+    if (years[-1] - years[0] == len(years) - 1) and (len(years) > 1):
         df = df[(df[yearcol] >= years[0]) & (df[yearcol] <= years[-1])]
     else:
         df = df[df[yearcol].isin(years)]
+    log.debug('df: %s' % str(df.head()))
     return df
 
 
@@ -246,101 +248,11 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
     return (varnames, df)
 
 
-class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter,
-                      argparse.RawDescriptionHelpFormatter):
-    pass
-
-
-def command_line_interface():
-    """ command line interface """
-
-    EPILOG  = "Use this tool to create netCDF files based on standard\n"
-    EPILOG += "LandscapeDNDC txt output files\n"
-
-    DESCR = "ldndc2nc :: LandscapeDNDC output converter (v%s)\n" % __version__
-
-    parser = argparse.ArgumentParser(description=DESCR,
-                                     epilog=EPILOG,
-                                     formatter_class=CustomFormatter)
-
-    parser.add_argument('INDIR', help="location of source ldndc txt files")
-    parser.add_argument('OUTDIR', help="destination of created netCDF files")
-
-    parser.add_argument("-c",
-                        "--config",
-                        dest="config",
-                        help="use this ldndc2nc config (default if not given)")
-
-    parser.add_argument("-l",
-                        "--limit",
-                        dest="limiter",
-                        help="limit files by this pattern in indir")
-
-    parser.add_argument("-o",
-                        "--outfile",
-                        dest="outfile",
-                        default="outfile.nc",
-                        help="name of the output netCDF file (def:outfile.nc)")
-
-    parser.add_argument(
-        "-r",
-        "--refnc",
-        dest="refinfo",
-        help="reference netCDF file (syntax: filename.nc,cidvar)")
-
-    parser.add_argument("-s",
-                        "--split",
-                        dest="split",
-                        action='store_true',
-                        default=False,
-                        help="split output to yearly netCDF files")
-
-    parser.add_argument("-S",
-                        "--store-config",
-                        dest="storeconfig",
-                        action='store_true',
-                        default=False,
-                        help="make the passed cfg file the new default")
-
-    parser.add_argument("-v",
-                        "--verbose",
-                        dest="verbose",
-                        action="store_true",
-                        default=False,
-                        help="increase output verbosity")
-
-    parser.add_argument("-y",
-                        "--years",
-                        dest="years",
-                        default="2000-2015",
-                        help="range of years to consider")
-
-    args = parser.parse_args()
-
-    print(DESCR)
-    log.debug('-' * 50)
-    log.debug('ldndc2nc called at: %s' % dt.datetime.now())
-
-    if args.verbose:
-        handlers = logging.getLogger().handlers
-        for handler in handlers:
-            if type(handler) is logging.StreamHandler:
-                handler.setLevel(logging.DEBUG)
-
-    if args.storeconfig and (args.config is None):
-        log.critical("Option -S requires that you pass a file with -c.")
-        exit(1)
-
-    return args
-
 
 def main():
-
-    args = command_line_interface()
-
-    # process (some) cli arguments
-    a = [int(x) for x in string.split(args.years, '-')]
-    years = range(a[0], a[1] + 1)
+    
+    # parse args
+    args = cli()
 
     # read config
     cfg = get_config(args.config)
@@ -353,7 +265,7 @@ def main():
 
     if use_passed_conf_file():
         try:
-            refname, refvar = args.refinfo.split(',')
+            refname, refvar = args.refinfo
         except:
             log.critical("Specified refinfo not valid: %s" % args.refinfo)
             exit(1)
@@ -376,7 +288,7 @@ def main():
     # read source output from ldndc
     varnames, df = read_ldndc_txt(args.INDIR,
                                   cfg['variables'],
-                                  years,
+                                  args.years,
                                   limiter=args.limiter)
 
     Dlut = {}
@@ -390,9 +302,11 @@ def main():
     for yr, yr_group in df.groupby('year'):
 
         data = {}
+        
+        log.debug("cell_ids")
 
         for vname in varnames:
-            _blank = np.ma.ones(_ndays(yr), len(cell_ids), len(cell_ids[0]))
+            _blank = np.ma.ones((_ndays(yr),) + cell_ids.shape)
             data[vname] = _blank * NODATA
             data[vname][:] = np.ma.masked
 
