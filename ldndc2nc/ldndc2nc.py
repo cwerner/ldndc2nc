@@ -23,7 +23,7 @@ import pandas as pd
 import param
 import xarray as xr
 
-from .extra import get_config, parse_config
+from .extra import get_config, parse_config, RefDataBuilder
 
 __version__ = "0.0.1"
 
@@ -356,8 +356,10 @@ def main():
     if args.storeconfig:
         set_config( cfg )
 
-    if args.refinfo is not None:
-        # use cli-specified refnc file
+    def use_passed_conf_file():
+        return args.refinfo is not None
+
+    if use_passed_conf_file():
         try:
             refname, refvar = args.refinfo.split(',')
         except:
@@ -376,79 +378,8 @@ def main():
             log.critical("Specified reffile %s not found" % refname)
             exit(1)
     else:
-        cfg_refdata = parse_config(cfg, section='refdata')
-        log.debug("Refdata parsed from default config file")
-
-        lonmin, latmin, lonmax, latmax = cfg_refdata['bbox']
-        res = cfg_refdata['res']
-
-        try:
-            mode = cfg_refdata['mode']   # local or global (def: global)
-        except KeyError:
-            mode = 'global'
-
-        try:
-            formula = cfg_refdata['formula']   # local or global (def: global)
-        except KeyError:
-            formula = 'continuous'
-
-        # we work with cell centers
-        cell_half = res * 0.5
-        lons = np.arange(lonmin+cell_half, lonmax, res)
-        lats = np.arange(latmin+cell_half, latmax, res) # we go top to bottom
-        global_lons = np.arange(-180+cell_half, 180, res)
-        global_lats = np.arange(-90+cell_half, 90, res)
-
-        def _find_nearest(array, value):
-            idx = (np.abs(array-value)).argmin()
-            return array.flat[idx]
-
-        if formula != 'continuous':
-            log.debug("Using the following formula to compute cellids: %s" % formula)
-
-        def _compute_formula_cid(j, i, method):
-            """ calculate cellid based on formula (using eval, with some validation) """
-            valid_chars = "xyij0123456789+*^"
-            safe_method = []
-            method = string.lower( string.replace(method, '^', '**') )
-            for c in method:
-                if c in valid_chars:
-                    safe_method.append(c)
-            return eval(''.join(safe_method), {'__builtins__': None}, {})
-
-        def _compute_continuous_cid(j, i, j_add, i_add, i_len):
-            """ calculate continuous cellid """
-            return (j+j_add)*i_len+(i+i_add)
-
-        def _compute_local_offset():
-            """ calulate i_add, j_add """
-            match_lon = _find_nearest(global_lons, lons[0])
-            match_lat = _find_nearest(global_lats, lats[::-1][0])   # upside down
-
-            i_add = np.where(global_lons == match_lon)[0]
-            j_add = np.where(global_lats[::-1] == match_lat)[0]     # upside down
-            return (j_add, i_add)
-
-        if mode == 'global':
-            j_add, i_add = _compute_local_offset()
-        else:
-            j_add, i_add = 0, 0
-
-        cell_ids = np.empty( (len(lats), len(lons)), np.int64 )
-        for j, lat in enumerate(lats):
-            for i, lon in enumerate(lons):
-                if formula != 'continuous':
-                    cellid = _compute_formula_cid(j+lat_offset, i+lon_offset, formula)
-                else:
-                    if mode == 'global':
-                        i_len = len(global_lons)
-                    else:
-                        i_len = len(lons)
-                    cellid = _compute_continuous_cid(j, i, j_add, i_add, i_len)
-                cell_ids[j,i] = cellid
-
-        # return cell_ids, lats, lons ( currently only local )
-
+        rdb = RefDataBuilder(cfg)
+        cell_ids, lats, lons = rdb.build()
 
     # read source output from ldndc
     varnames, df = read_ldndc_txt(args.INDIR, cfg['variables'], years, limiter=args.limiter)

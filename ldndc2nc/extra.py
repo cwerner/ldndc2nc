@@ -5,11 +5,18 @@ import logging
 import os
 from pkg_resources import Requirement, resource_filename
 import shutil
+import string
 
+import numpy as np
+import param
 import yaml
 
 # start logger
 log = logging.getLogger(__name__) 
+
+def enum(*sequential, **named):
+    enums = dict(zip(sequential, range(len(sequential))), **named)
+    return type('Enum', (), enums)
 
 def _copy_default_config():
     """ copy default conf file to user dir """
@@ -81,6 +88,7 @@ def parse_config(cfg, section=None):
         try:
             cfg_data = cfg[section]
         except KeyError:
+            log.critical(cfg.keys())
             log.critical("Section <%s> not found in config" % section)
             exit(1)
     else:
@@ -120,3 +128,106 @@ def set_config(cfg):
     with open(fname, 'w') as f:
         f.write( yaml.dump(cfg, default_flow_style=False))
 
+
+class RefDataBuilder(param.Parameterized):
+    lonmin  = param.Number(None, bounds=(-180,180), doc="min longitude")
+    latmin  = param.Number(None, bounds=(-90,  90), doc="min latitude")
+    lonmax  = param.Number(None, bounds=(-180,180), doc="max longitude")
+    latmax  = param.Number(None, bounds=(-90,  90), doc="max latitude")
+    local   = param.Boolean(False, doc="number ids for regional subset")
+    formula = param.String(default='continuous')
+    res     = param.Number(None, bounds=(0,5), doc="cell resolution in degrees")
+    i_shift = 0
+    j_shift = 0
+
+    def __init__(self, cfg):
+        _cfg = parse_config(cfg, section='refdata')
+
+        try:
+            self.lonmin, self.latmin, self.lonmax, self.latmax = _cfg['bbox']
+        except Exception as e:
+            log.critical(str(e))
+
+        try:
+            self.res = _cfg['res']
+        except Exception as e:
+            log.critical("No <res> statement in refdata")
+            exit(1)
+
+        try:
+            self.local = _cfg['local']
+        except Exception as e:
+            log.debug("No <local> statement in refdata. Using 'global' mode")
+
+        try:
+            formula = _cfg['formula']
+            formula = self._check_formula( formula )
+            self.formula = formula
+        except:
+            log.debug("No <formula> statement in conf file. Using 'continuous' mode")
+
+        # we work with cell centers
+        cell_half = self.res * 0.5
+        self.lons = np.arange(self.lonmin+cell_half, self.lonmax, self.res)
+        self.lats = np.arange(self.latmin+cell_half, self.latmax, self.res) # we go top to bottom
+        self.globlons = np.arange(-180+cell_half, 180, self.res)
+        self.globlats = np.arange(-90+cell_half, 90, self.res)
+
+        if not self.local:
+            # compute shift of local bbox in respect to global domain
+            m_lon = self._find_nearest(self.globlons, self.lons[0])
+            m_lat = self._find_nearest(self.globlats, self.lats[::-1][0])    # upside down
+            self.i_shift = np.where(self.globlons       == m_lon)[0]
+            self.j_shift = np.where(self.globlats[::-1] == m_lat)[0]    # upside down
+
+    def _check_formula( formula_str ):
+        """ check norefdata formula given in conf file """
+        valid_chars = "xyij0123456789+*^"
+        safe_method = []
+        formula_str = string.lower( string.replace(formula_str, '^', '**') )
+        for c in formula_str:
+            if c in valid_chars:
+                formula_str_validated.append(c)
+        return ''.join(formula_str_validated)
+
+    def _compute_formula_cid(self, j, i):
+        """ calculate cellid based on formula """
+        i += self.i_shift
+        j += self.j_shift
+        return eval(self.rd.formula, {'__builtins__': None}, {})
+
+    def _compute_continuous_cid(self, j, i):
+        """ calculate continuous cellid """
+        if self.local:
+            i_len = len(self.lons)
+        else:
+            i_len = len(self.globlons)
+        return (j+self.j_shift)*i_len+(i+self.i_shift)
+
+    def _find_nearest(self, array, value):
+        """ locate closest value match """
+        idx = (np.abs(array-value)).argmin()
+        return array.flat[idx]
+
+    def build(self):
+        """ actually populate cellid array """
+        cell_ids = np.empty( (len(self.lats), len(self.lons)), np.int64 )
+        for j, lat in enumerate(self.lats):
+            for i, lon in enumerate(self.lons):
+                if self.formula != 'continuous':
+                    cid = self._compute_formula_cid(j, i)
+                else:
+                    cid = self._compute_continuous_cid(j, i)
+                cell_ids[j,i] = cid
+        return (cell_ids, self.lats, self.lons)
+
+
+def create_refdata(cfg):
+    """ produce refdata using info from cfg file
+        :param: yaml cfg
+        :return: cell_ids, lats, lons
+        :rtype: tuple
+    """
+    rdb = RefDataBuilder(cfg)
+    cell_ids = rdb.build()
+    
