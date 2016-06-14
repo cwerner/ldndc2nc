@@ -392,20 +392,21 @@ def main():
         except KeyError:
             formula = 'continuous'
 
-
         # we work with cell centers
-        lonmin += res * 0.5
-        lonmax -= res * 0.5
-        latmin += res * 0.5
-        latmax -= res * 0.5
+        cell_half = res * 0.5
+        lons = np.arange(lonmin+cell_half, lonmax, res)
+        lats = np.arange(latmin+cell_half, latmax, res) # we go top to bottom
+        global_lons = np.arange(-180+cell_half, 180, res)
+        global_lats = np.arange(-90+cell_half, 90, res)
 
-        lons = np.arange(lonmin, lonmax+res, res)
-        lats = np.arange(latmin, latmax+res, res)[::-1] # we go top to bottom
+        def _find_nearest(array, value):
+            idx = (np.abs(array-value)).argmin()
+            return array.flat[idx]
 
         if formula != 'continuous':
             log.debug("Using the following formula to compute cellids: %s" % formula)
 
-        def _calc_cellid(j, i, method):
+        def _compute_formula_cid(j, i, method):
             """ calculate cellid based on formula (using eval, with some validation) """
             valid_chars = "xyij0123456789+*^"
             safe_method = []
@@ -413,27 +414,42 @@ def main():
             for c in method:
                 if c in valid_chars:
                     safe_method.append(c)
-            return eval(''.join(safe_method))
+            return eval(''.join(safe_method), {'__builtins__': None}, {})
 
-        # create actual cellids
+        def _compute_continuous_cid(j, i, j_add, i_add, i_len):
+            """ calculate continuous cellid """
+            return (j+j_add)*i_len+(i+i_add)
 
-        global_lons = np.arange(-180, 180+res, res)
-        global_lats = np.arange(-90, 90+res, res)[::-1]
+        def _compute_local_offset():
+            """ calulate i_add, j_add """
+            match_lon = _find_nearest(global_lons, lons[0])
+            match_lat = _find_nearest(global_lats, lats[::-1][0])   # upside down
+
+            i_add = np.where(global_lons == match_lon)[0]
+            j_add = np.where(global_lats[::-1] == match_lat)[0]     # upside down
+            return (j_add, i_add)
+
+        if mode == 'global':
+            j_add, i_add = _compute_local_offset()
+        else:
+            j_add, i_add = 0, 0
 
         cell_ids = np.empty( (len(lats), len(lons)), np.int64 )
         for j, lat in enumerate(lats):
             for i, lon in enumerate(lons):
                 if formula != 'continuous':
-                    cellid = _calc_cellid(j, i, formula)
+                    cellid = _compute_formula_cid(j+lat_offset, i+lon_offset, formula)
                 else:
-                    # local cellid (continuous)
-                    cellid = j*len(lons)+i
-
+                    if mode == 'global':
+                        i_len = len(global_lons)
+                    else:
+                        i_len = len(lons)
+                    cellid = _compute_continuous_cid(j, i, j_add, i_add, i_len)
                 cell_ids[j,i] = cellid
 
         # return cell_ids, lats, lons ( currently only local )
 
-        
+
     # read source output from ldndc
     varnames, df = read_ldndc_txt(args.INDIR, cfg['variables'], years, limiter=args.limiter)
 
@@ -441,7 +457,7 @@ def main():
     for j in range(len(cell_ids)):
         for i in range(len(cell_ids[0])):
             if np.isnan(cell_ids[j, i]) == False:
-                Dlut[int(cell_ids[j, i])] = (j,i)
+                Dlut[int(cell_ids[j, i])] = (len(cell_ids)-j,i) # flip lat/ j
 
     ds_all = []
 
@@ -481,6 +497,8 @@ def main():
 
         for vname in varnames:
             name, units = _split_colname(vname)
+
+            # create dataarray (we need to flip it (!)
             da = xr.DataArray(data[vname],
                               coords=[('time', times), ('lat', lats),
                                       ('lon', lons)])
