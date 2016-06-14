@@ -7,6 +7,7 @@
 # christian.werner@senckenberg.de
 """ldndc2nc.ldndc2nc: provides entry point main()."""
 
+import argparse
 import calendar
 import datetime as dt
 import glob
@@ -16,14 +17,13 @@ import re
 import string
 import sys
 from collections import OrderedDict
-from optparse import OptionParser
 
 import numpy as np
 import pandas as pd
 import param
 import xarray as xr
 
-from .extra import get_config
+from .extra import get_config, parse_config, RefDataBuilder
 
 __version__ = "0.0.1"
 
@@ -241,7 +241,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         df_all.append(df)
 
     # check if all tables have the same number of rows
-    log.info("Data table length: %s" % ','.join([len(x) for x in df_all]))
+    log.debug("Data table length: %s" % ','.join([str(len(x)) for x in df_all]))
 
     df = pd.concat(df_all, axis=1)
     df.reset_index(inplace=True)
@@ -249,134 +249,121 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
     return (varnames, df)
 
 
-class MyParser(OptionParser):
-    def format_epilog(self, formatter):
-        return self.epilog
-
+class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
+    pass
 
 def cli():
     """ command line interface """
 
-    parser = MyParser( "%prog [options] indir outdir", \
-            epilog="""
-Use this tool to create netCDF files based on standard
-LandscapeDNDC txt output files
-""")
+    EPILOG  = "Use this tool to create netCDF files based on standard\n"
+    EPILOG += "LandscapeDNDC txt output files\n"
 
-    parser.add_option(
+    DESCR   = "ldndc2nc :: LandscapeDNDC output converter (v%s)\n""" % __version__
+
+    parser = argparse.ArgumentParser(description=DESCR,
+                                     epilog=EPILOG,
+                                     formatter_class=CustomFormatter)
+
+    parser.add_argument('INDIR', help="location of source ldndc txt files")
+    parser.add_argument('OUTDIR', help="destination of created netCDF files")
+
+    parser.add_argument(
         "-c",
         "--config",
         dest="config",
-        default=None,
-        help="use specific ldndc2nc config file, otherwise look in default locations")
+        help="use this ldndc2nc config (default if not given)")
 
-    parser.add_option(
+    parser.add_argument(
         "-l",
         "--limit",
         dest="limiter",
-        default='',
         help="limit files by this pattern in indir")
 
-    parser.add_option(
+    parser.add_argument(
         "-o",
         "--outfile",
         dest="outfile",
         default="outfile.nc",
         help="name of the output netCDF file (def:outfile.nc)")
 
-    parser.add_option(
+    parser.add_argument(
         "-r",
         "--refnc",
         dest="refinfo",
-        default="",
-        help="reference nc file (syntax: filename.nc,cidvar)")
+        help="reference netCDF file (syntax: filename.nc,cidvar)")
 
-    parser.add_option(
+    parser.add_argument(
         "-s",
         "--split",
         dest="split",
         action='store_true',
         default=False,
-        help="split output in yearly netCDF files with daily resolution")
+        help="split output to yearly netCDF files")
 
-    parser.add_option(
+    parser.add_argument(
         "-S",
         "--store-config",
         dest="storeconfig",
         action='store_true',
         default=False,
-        help="make the passed config file the new default")
+        help="make the passed cfg file the new default")
 
-    parser.add_option(
+    parser.add_argument(
         "-v", 
         "--verbose",
         dest="verbose",
-        action="store_true",        
+        action="store_true",
+        default=False,
         help="increase output verbosity")
     
-    parser.add_option(
+    parser.add_argument(
         "-y",
         "--years",
         dest="years",
         default="2000-2015",
-        help="give the range of years to consider (def:2000-2015)")
+        help="range of years to consider")
 
-    (options, args) = parser.parse_args()
+    args = parser.parse_args()
 
-    # parse some basic options
-    if len(args) != 2:
-        log.critical("You need give input and output dirs.")
-        parser.print_help()
-        exit(1)
+    print(DESCR)
+    log.debug('-' * 50)
+    log.debug('ldndc2nc called at: %s' % dt.datetime.now())
 
-    if options.verbose:
+    if args.verbose:
         handlers = logging.getLogger().handlers
         for handler in handlers:
             if type(handler) is logging.StreamHandler:
                 handler.setLevel(logging.DEBUG)
 
-    return (options, args)
+    if args.storeconfig and (args.config is None):
+        log.critical("Option -S requires that you pass a file with -c.")
+        exit(1)
 
-
-def greetScreen():
-
-    header = """ldndc2nc :: LandscapeDNDC output converter (v%s)\n""" % __version__
-    print(header)
-    log.debug('-' * 50)
-    log.debug('ldndc2nc called at: %s' % dt.datetime.now())
+    return args
 
 
 def main():
 
-    greetScreen()
+    # process command line arguments
+    args = cli()
 
-
-    # process command line args and options
-    options, args = cli()
-
-    inpath = args[0]
-    outpath = args[1]
-
-    a = [int(x) for x in string.split(options.years, '-')]
+    a = [int(x) for x in string.split(args.years, '-')]
     years = range(a[0], a[1] + 1)
 
     # read config
-    cfg = get_config(options.config)
+    cfg = get_config(args.config)
 
-    # store it
-    if options.storeconfig:
-        if options.config is not None:
-            set_config( cfg )
-        else:
-            log.critical("Options -S requires that you pass a file with -c.")
-            exit(1)
+    if args.storeconfig:
+        set_config( cfg )
 
-    if options.refinfo != "":
-        # use cli-specified refnc file
+    def use_passed_conf_file():
+        return args.refinfo is not None
+
+    if use_passed_conf_file():
         try:
-            refname, refvar = options.refinfo.split(',')
+            refname, refvar = args.refinfo.split(',')
         except:
-            log.critical("Specified refinfo not valid: %s" % options.refinfo)
+            log.critical("Specified refinfo not valid: %s" % args.refinfo)
             exit(1)
 
         if os.path.isfile( refname ):
@@ -384,29 +371,24 @@ def main():
                 if refvar not in refnc.data_vars:
                     log.critical("CellID variable <%s> not found in %s." % (refvar, refname))
                     exit(1)
-                ids = refnc[refvar].values
+                cell_ids = np.flipud(refnc[refvar].values)  # invert lat to match manual mode
                 lats = refnc['lat'].values
                 lons = refnc['lon'].values
         else:
             log.critical("Specified reffile %s not found" % refname)
             exit(1)
     else:
-        log.critical('RefFile not specified. This is not handled yet.')
-        exit(1)
+        rdb = RefDataBuilder(cfg)
+        cell_ids, lats, lons = rdb.build()
 
     # read source output from ldndc
-    varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
+    varnames, df = read_ldndc_txt(args.INDIR, cfg['variables'], years, limiter=args.limiter)
 
-    idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
-    jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
-
-    # TODO make this nicer
-    # create lookup dictionary
     Dlut = {}
-    for i in range(len(ids)):
-        for j in range(len(ids[0])):
-            if np.isnan(ids[i, j]) == False:
-                Dlut[int(ids[i, j])] = (idx[i, j], jdx[i, j])
+    for j in range(len(cell_ids)):
+        for i in range(len(cell_ids[0])):
+            if np.isnan(cell_ids[j, i]) == False:
+                Dlut[int(cell_ids[j, i])] = (len(cell_ids)-j,i) # flip lat/ j
 
     ds_all = []
 
@@ -415,13 +397,13 @@ def main():
         data = {}
 
         for vname in varnames:
-            data[vname] = np.ma.ones((_ndays(yr), len(ids), len(ids[0]))) * NODATA
+            data[vname] = np.ma.ones((_ndays(yr), len(cell_ids), len(cell_ids[0]))) * NODATA
             data[vname][:] = np.ma.masked
 
         # loop group-wise (group: id)
         for id, id_group in yr_group.groupby('id'):
 
-            idx, jdx = Dlut[id]  # get cell position in array
+            jdx, idx = Dlut[id]  # get cell position in array
 
             for vname in varnames:
                 # check for incomplete year data, fill with nodata value till end of year
@@ -446,6 +428,8 @@ def main():
 
         for vname in varnames:
             name, units = _split_colname(vname)
+
+            # create dataarray (we need to flip it (!)
             da = xr.DataArray(data[vname],
                               coords=[('time', times), ('lat', lats),
                                       ('lon', lons)])
@@ -460,20 +444,20 @@ def main():
                                 'shuffle': True})  # add compression
             ds[name] = da
 
-        if options.split:
-            outfilename = options.outfile[:-3] + '_%d' % yr + '.nc'
+        if args.split:
+            outfilename = args.outfile[:-3] + '_%d' % yr + '.nc'
 
             ds.to_netcdf(
-                os.path.join(outpath, outfilename),
+                os.path.join(args.OUTDIR, outfilename),
                 format='NETCDF4_CLASSIC')
             ds.close()
         else:
             ds_all.append( ds )
 
-    if not options.split:
+    if not args.split:
         ds = xr.concat(ds_all, dim='time')
         ds.to_netcdf(
-            os.path.join(outpath, options.outfile),
+            os.path.join(args.OUTDIR, args.outfile),
             format='NETCDF4_CLASSIC')
         ds.close()
 
