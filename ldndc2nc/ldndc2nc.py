@@ -369,7 +369,7 @@ def main():
                 if refvar not in refnc.data_vars:
                     log.critical("CellID variable <%s> not found in %s." % (refvar, refname))
                     exit(1)
-                cell_ids = refnc[refvar].values
+                cell_ids = np.flipud(refnc[refvar].values)  # invert lat to match manual mode
                 lats = refnc['lat'].values
                 lons = refnc['lon'].values
         else:
