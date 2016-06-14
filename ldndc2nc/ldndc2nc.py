@@ -25,7 +25,7 @@ import xarray as xr
 
 from .extra import get_config, parse_config, RefDataBuilder
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 # __version__ = param.Version(release=(0,0,1), fpath=__file__,
 #                            commit="$Format:%h$", reponame='ldndc2nc')
