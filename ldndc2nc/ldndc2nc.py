@@ -7,27 +7,31 @@
 # christian.werner@senckenberg.de
 """ldndc2nc.ldndc2nc: provides entry point main()."""
 
+import argparse
 import calendar
+import datetime as dt
 import glob
+import logging
 import os
 import re
 import string
 import sys
-import datetime as dt
 from collections import OrderedDict
-from optparse import OptionParser
 
 import numpy as np
 import pandas as pd
 import param
 import xarray as xr
 
-from .extra import get_config
+from .extra import get_config, parse_config, RefDataBuilder
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 # __version__ = param.Version(release=(0,0,1), fpath=__file__,
 #                            commit="$Format:%h$", reponame='ldndc2nc')
+
+# start logger
+log = logging.getLogger(__name__) 
 
 NODATA = -9999
 
@@ -63,6 +67,11 @@ def _daterange(start_date, end_date):
     for n in range(int((end_date - start_date).days)):
         yield start_date + dt.timedelta(n)
 
+def _ndays(yr):
+    ndays = 365
+    if calendar.isleap(yr):
+        ndays = 366
+    return ndays
 
 def _is_composite_var(v):
     return type(v) == tuple
@@ -86,35 +95,35 @@ def _extract_fileno(fname):
     elif len(x) == 1:
         fileno = int(x[0])
     else:
-        print 'Multiple matches! This should not be.'
-        print fname
-        raise
+        log.critical("Multiple matches! fname: %s" % fname)
+        exit(1)
     return fileno
 
 
-def _select_files(inpath, ldndc_file_type, limiter=None):
+def _select_files(inpath, ldndc_file_type, limiter=""):
     """ find all ldndc outfiles of given type from inpath (limit using limiter)
     
         :param str inpath: path where files are located
         :param str ldndc_file_type: LandscapeDNDC txt filename pattern (i.e. soilcheistry-daily.txt)
-        :param str limiter: (optionally) limit selection with this expression
-        :return: list of matching LandscapeDNDC txt files
+        :param str limiter: (optional) limit selection using this expression
+        :return: list of matching LandscapeDNDC txt files in indir
         :rtype: list
     """
     infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
     infiles = glob.glob(infile_pattern)
 
-    if limiter is not None:
+    if limiter != "":
         infiles = [x for x in infiles if limiter in os.path.basename(x)]
 
     infiles.sort()
 
     if len(infiles) == 0:
-        print '\nNo LDNDC output files of type "%s"' % ldndc_file_type
-        print 'Input directory:', inpath
-        print 'Pattern used:   ', infile_pattern
-        if limiter is not None:
-            print 'Filter used:', limiter
+        msg  = "No LandscapeDNDC input files of type <%s>\n" % ldndc_file_type
+        msg += "Input dir:    %s\n" % inpath
+        msg += "Pattern used: %s"   % infile_pattern
+        if limiter != "":
+            msg += "\nFilter used:  %s" % limiter
+        log.critical(msg)
         exit(1)
 
     return infiles
@@ -232,7 +241,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         df_all.append(df)
 
     # check if all tables have the same number of rows
-    print [len(x) for x in df_all]
+    log.debug("Data table length: %s" % ','.join([str(len(x)) for x in df_all]))
 
     df = pd.concat(df_all, axis=1)
     df.reset_index(inplace=True)
@@ -240,196 +249,215 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
     return (varnames, df)
 
 
-class MyParser(OptionParser):
-    def format_epilog(self, formatter):
-        return self.epilog
-
+class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
+    pass
 
 def cli():
     """ command line interface """
 
-    parser = MyParser( "usage: %prog [options] indir outdir", \
-            epilog="""
-Use this tool to create netCDF files based on standard
-LandscapeDNDC txt output files
-""")
+    EPILOG  = "Use this tool to create netCDF files based on standard\n"
+    EPILOG += "LandscapeDNDC txt output files\n"
 
-    parser.add_option(
+    DESCR   = "ldndc2nc :: LandscapeDNDC output converter (v%s)\n""" % __version__
+
+    parser = argparse.ArgumentParser(description=DESCR,
+                                     epilog=EPILOG,
+                                     formatter_class=CustomFormatter)
+
+    parser.add_argument('INDIR', help="location of source ldndc txt files")
+    parser.add_argument('OUTDIR', help="destination of created netCDF files")
+
+    parser.add_argument(
         "-c",
         "--config",
         dest="config",
-        default=None,
-        help="use specific ldndc2nc config file, otherwise look in default locations")
+        help="use this ldndc2nc config (default if not given)")
 
-    parser.add_option(
+    parser.add_argument(
         "-l",
         "--limit",
         dest="limiter",
-        default='',
         help="limit files by this pattern in indir")
 
-    parser.add_option(
+    parser.add_argument(
         "-o",
         "--outfile",
         dest="outfile",
         default="outfile.nc",
         help="name of the output netCDF file (def:outfile.nc)")
 
-    parser.add_option(
+    parser.add_argument(
+        "-r",
+        "--refnc",
+        dest="refinfo",
+        help="reference netCDF file (syntax: filename.nc,cidvar)")
+
+    parser.add_argument(
         "-s",
         "--split",
         dest="split",
         action='store_true',
         default=False,
-        help="split output in yearly netCDF files with daily resolution")
+        help="split output to yearly netCDF files")
 
-    parser.add_option(
+    parser.add_argument(
         "-S",
         "--store-config",
         dest="storeconfig",
         action='store_true',
         default=False,
-        help="make the passed config file the new default")
+        help="make the passed cfg file the new default")
 
-    parser.add_option(
+    parser.add_argument(
+        "-v", 
+        "--verbose",
+        dest="verbose",
+        action="store_true",
+        default=False,
+        help="increase output verbosity")
+    
+    parser.add_argument(
         "-y",
         "--years",
         dest="years",
         default="2000-2015",
-        help="give the range of years to consider (def:2000-2015)")
+        help="range of years to consider")
 
-    (options, args) = parser.parse_args()
+    args = parser.parse_args()
 
-    if len(args) != 2:
-        print "\nYou need to specify an input and output directory.\nExiting...\n"
-        parser.print_help()
+    print(DESCR)
+    log.debug('-' * 50)
+    log.debug('ldndc2nc called at: %s' % dt.datetime.now())
+
+    if args.verbose:
+        handlers = logging.getLogger().handlers
+        for handler in handlers:
+            if type(handler) is logging.StreamHandler:
+                handler.setLevel(logging.DEBUG)
+
+    if args.storeconfig and (args.config is None):
+        log.critical("Option -S requires that you pass a file with -c.")
         exit(1)
 
-    return (options, args)
-
-
-def greetScreen():
-
-    header = """ldndc2nc :: LandscapeDNDC output converter (v%s)""" % __version__
-    print(header)
+    return args
 
 
 def main():
 
-    greetScreen()
+    # process command line arguments
+    args = cli()
 
-    # process command line args and options
-    options, args = cli()
-
-    inpath = args[0]
-    outpath = args[1]
-
-    a = [int(x) for x in string.split(options.years, '-')]
+    a = [int(x) for x in string.split(args.years, '-')]
     years = range(a[0], a[1] + 1)
 
     # read config
-    cfg = get_config(options.config)
+    cfg = get_config(args.config)
 
-    # store it
-    if options.storeconfig:
-        if options.config is not None:
-            set_config( cfg )
-        else:
-            print 'You need to pass a valid config file with the -c option.'
+    if args.storeconfig:
+        set_config( cfg )
+
+    def use_passed_conf_file():
+        return args.refinfo is not None
+
+    if use_passed_conf_file():
+        try:
+            refname, refvar = args.refinfo.split(',')
+        except:
+            log.critical("Specified refinfo not valid: %s" % args.refinfo)
             exit(1)
 
+        if os.path.isfile( refname ):
+            with (xr.open_dataset( refname )) as refnc:
+                if refvar not in refnc.data_vars:
+                    log.critical("CellID variable <%s> not found in %s." % (refvar, refname))
+                    exit(1)
+                cell_ids = np.flipud(refnc[refvar].values)  # invert lat to match manual mode
+                lats = refnc['lat'].values
+                lons = refnc['lon'].values
+        else:
+            log.critical("Specified reffile %s not found" % refname)
+            exit(1)
+    else:
+        rdb = RefDataBuilder(cfg)
+        cell_ids, lats, lons = rdb.build()
+
     # read source output from ldndc
-    varnames, df = read_ldndc_txt(inpath, cfg.variables, years, limiter=options.limiter)
+    varnames, df = read_ldndc_txt(args.INDIR, cfg['variables'], years, limiter=args.limiter)
 
-    # TODO read from external conf file or cmd parameter
-    PATHREFDATA = '/Users/cwerner/Documents/projects/vietnam/refdata'
-    REFNC = 'VN_MISC4.nc'
-
-    # read sim ids from reference file
-    with (xr.open_dataset(os.path.join(PATHREFDATA, REFNC))) as refnc:
-        ids = refnc['cid'].values
-        lats = refnc['lat'].values
-        lons = refnc['lon'].values
-
-    idx = np.array(range(len(ids[0])) * len(ids)).reshape(ids.shape)
-    jdx = np.array([[x] * len(ids[0]) for x in range(len(ids))])
-
-    # TODO make this nicer
-    # create lookup dictionary
     Dlut = {}
-    for i in range(len(ids)):
-        for j in range(len(ids[0])):
-            if np.isnan(ids[i, j]) == False:
-                Dlut[int(ids[i, j])] = (idx[i, j], jdx[i, j])
+    for j in range(len(cell_ids)):
+        for i in range(len(cell_ids[0])):
+            if np.isnan(cell_ids[j, i]) == False:
+                Dlut[int(cell_ids[j, i])] = (len(cell_ids)-j,i) # flip lat/ j
 
-    if options.split:
-        print " Splitting into yearly chucks"
+    ds_all = []
 
-        # loop group-wise (group: year)
-        for yr, yr_group in df.groupby('year'):
+    for yr, yr_group in df.groupby('year'):
+        
+        data = {}
 
-            data = {}
-            zsize = 365
-            if calendar.isleap(yr): zsize = 366
+        for vname in varnames:
+            data[vname] = np.ma.ones((_ndays(yr), len(cell_ids), len(cell_ids[0]))) * NODATA
+            data[vname][:] = np.ma.masked
 
-            for vname in varnames:
-                data[vname] = np.ma.ones((zsize, len(ids), len(ids[0])
-                                          )) * NODATA
-                data[vname][:] = np.ma.masked
+        # loop group-wise (group: id)
+        for id, id_group in yr_group.groupby('id'):
 
-            # loop group-wise (group: id)
-            for id, id_group in yr_group.groupby('id'):
-
-                idx, jdx = Dlut[id]  # get cell position in array
-
-                for vname in varnames:
-                    # check for incomplete year data, fill with nodata value till end of year
-                    if len(id_group[vname]) < len(data[vname][:, 0, 0]):
-                        missingvals = zsize - len(id_group[vname])
-                        dslice = np.concatenate(id_group[vname],
-                                                np.asarray([NODATA] *
-                                                           missingvals))
-                        print len(dslice)
-                    else:
-                        dslize = id_group[vname]
-
-                    data[vname][:, jdx, idx] = dslize
-
-            # create an empty netcdf dataset
-            ds = xr.Dataset()
-
-            # loop over variables and add those the netcdf file
-            times = pd.date_range('%s-01-01' % yr,
-                                  freq='D',
-                                  periods=zsize,
-                                  tz=None)
+            jdx, idx = Dlut[id]  # get cell position in array
 
             for vname in varnames:
-                name, units = _split_colname(vname)
-                da = xr.DataArray(data[vname],
-                                  coords=[('time', times), ('lat', lats),
-                                          ('lon', lons)])
-                da.name = name
-                da.attrs.update(defaultAttrsDA)
-                da.attrs['units'] = units
+                # check for incomplete year data, fill with nodata value till end of year
+                if len(id_group[vname]) < len(data[vname][:, 0, 0]):
+                    missingvals = _ndays(yr) - len(id_group[vname])
+                    dslice = np.concatenate(id_group[vname],
+                                            np.asarray([NODATA] *
+                                                       missingvals))
+                    log.warn("Data length encountered shorter than expected!")
+                else:
+                    dslize = id_group[vname]
 
-                # more optimization for faster netcdfs !!!
-                da.encoding.update({'complevel': 5,
-                                    'zlib': True,
-                                    'chunksizes': (10, 40, 20),
-                                    'shuffle': True})  # add compression
-                ds[name] = da
+                data[vname][:, jdx, idx] = dslize
 
-            # write netcdf file
-            # TODO enable, read info from ldndc.conf
-            #ds.attrs.update(defaultAttrsDS)
-            outfilename = options.outfile
+        ds = xr.Dataset()
 
-            if options.split:
-                outfilename = outfilename[:-3] + '_%d' % yr + '.nc'
+        # loop over variables and add those the netcdf file
+        times = pd.date_range('%s-01-01' % yr,
+                              freq='D',
+                              periods=_ndays(yr),
+                              tz=None)
+
+        for vname in varnames:
+            name, units = _split_colname(vname)
+
+            # create dataarray (we need to flip it (!)
+            da = xr.DataArray(data[vname],
+                              coords=[('time', times), ('lat', lats),
+                                      ('lon', lons)])
+            da.name = name
+            da.attrs.update(defaultAttrsDA)
+            da.attrs['units'] = units
+
+            # more optimization for faster netcdfs !!!
+            da.encoding.update({'complevel': 5,
+                                'zlib': True,
+                                'chunksizes': (10, 40, 20),
+                                'shuffle': True})  # add compression
+            ds[name] = da
+
+        if args.split:
+            outfilename = args.outfile[:-3] + '_%d' % yr + '.nc'
 
             ds.to_netcdf(
-                os.path.join(outpath, outfilename),
+                os.path.join(args.OUTDIR, outfilename),
                 format='NETCDF4_CLASSIC')
-
             ds.close()
+        else:
+            ds_all.append( ds )
+
+    if not args.split:
+        ds = xr.concat(ds_all, dim='time')
+        ds.to_netcdf(
+            os.path.join(args.OUTDIR, args.outfile),
+            format='NETCDF4_CLASSIC')
+        ds.close()
+
