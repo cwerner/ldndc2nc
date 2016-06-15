@@ -106,8 +106,8 @@ def cli():
                                      epilog=EPILOG,
                                      formatter_class=CustomFormatter)
 
-    parser.add_argument('INDIR', help="location of source ldndc txt files")
-    parser.add_argument('OUTDIR', help="destination of created netCDF files")
+    parser.add_argument('indir', help="location of source ldndc txt files")
+    parser.add_argument('outdir', help="destination of created netCDF files")
 
     parser.add_argument("-c",
                     dest="config",

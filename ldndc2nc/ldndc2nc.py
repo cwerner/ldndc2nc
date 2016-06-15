@@ -75,6 +75,16 @@ def _is_composite_var(v):
     return type(v) == tuple
 
 
+def _build_id_lut(array):
+    """ create lookup table to query cellid by i,j value """
+    Dlut = {}
+    for j in range(len(array)):
+        for i in range(len(array[0])):
+            if not np.isnan(array[j, i]):
+                Dlut[int(array[j, i])] = (len(array) - j, i)
+    return Dlut
+
+
 def _extract_fileno(fname):
     """ extract file iterator
 
@@ -250,7 +260,6 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
 
 
 def main():
-    
     # parse args
     args = cli()
 
@@ -262,10 +271,10 @@ def main():
         set_config(cfg)
 
     # read or build refdata array
-    def use_passed_conf_file():
+    def use_cli_refdata():
         return args.refinfo is not None
 
-    if use_passed_conf_file():
+    if use_cli_refdata():
         reffile, refvar = args.refinfo
         if os.path.isfile(reffile):
             with (xr.open_dataset(reffile)) as refnc:
@@ -282,25 +291,20 @@ def main():
         rdb = RefDataBuilder(cfg)
         cell_ids, lats, lons = rdb.build()
 
+    # create lut for fast id-i,j matching
+    Dlut = _build_id_lut(cell_ids)
+
     # read source output from ldndc
     varnames, df = read_ldndc_txt(args.INDIR,
                                   cfg['variables'],
                                   args.years,
                                   limiter=args.limiter)
 
-    Dlut = {}
-    for j in range(len(cell_ids)):
-        for i in range(len(cell_ids[0])):
-            if not np.isnan(cell_ids[j, i]):
-                Dlut[int(cell_ids[j, i])] = (len(cell_ids) - j, i)
-
     ds_all = []
 
     for yr, yr_group in df.groupby('year'):
 
         data = {}
-        
-        log.debug("cell_ids")
 
         for vname in varnames:
             _blank = np.ma.ones((_ndays(yr),) + cell_ids.shape)
