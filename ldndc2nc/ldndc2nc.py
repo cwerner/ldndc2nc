@@ -74,6 +74,8 @@ def _ndays(yr):
 def _is_composite_var(v):
     return type(v) == tuple
 
+def _all_items_identical(x):
+    return x.count(x[0]) == len(x)
 
 def _build_id_lut(array):
     """ create lookup table to query cellid by i,j value """
@@ -230,7 +232,6 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         df.set_index(['id', 'year', 'julianday'], inplace=True)
 
         for v in varData[ldndc_file_type]:
-
             if _is_composite_var(v):
                 new_colname, src_colnames = v
                 drop_colnames = []
@@ -250,7 +251,10 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         df_all.append(df)
 
     # check if all tables have the same number of rows
-    log.debug("nRows: %s" % ','.join([str(len(x)) for x in df_all]))
+    if _all_items_identical( [len(x) for x in df_all] ):
+        log.debug("All data.frames have the same length (n=%d)" % len(df_all[0]))
+    else:
+        log.debug("Rows differ in data.frames: %s" % ''.join([str(len(x)) for x in df_all]))
 
     df = pd.concat(df_all, axis=1)
     df.reset_index(inplace=True)
