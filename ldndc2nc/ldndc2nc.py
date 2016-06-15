@@ -34,6 +34,9 @@ log = logging.getLogger(__name__)
 NODATA = -9999
 defaultAttrsDA = {'_FillValue': NODATA, 'missing_value': NODATA}
 
+# standard columns
+basecols = ['id', 'year', 'julianday']
+
 
 # functions
 def _split_colname(colname):
@@ -63,6 +66,21 @@ def _daterange(start_date, end_date):
         yield start_date + dt.timedelta(n)
 
 
+def _gapfill_df(df, dates, ids):
+    """ gap-fill data.frame """
+    basecoldata = [(0, d.year, d.timetuple().tm_yday) for d in dates]
+    df_ref_all = []
+    for id in ids:
+        df_ref = pd.DataFrame(basecoldata, columns=basecols)
+        df_ref.id = id
+        df_ref_all.append(df_ref)
+    df_template = pd.concat(df_ref_all, axis=0)
+    df = pd.merge(df_template, df, how='left', on=basecols)
+    df = df.fillna(0.0)
+    df.reset_index()
+    return df
+
+
 def _ndays(yr):
     """ return the number of days in year """
     ndays = 365
@@ -74,8 +92,10 @@ def _ndays(yr):
 def _is_composite_var(v):
     return type(v) == tuple
 
+
 def _all_items_identical(x):
     return x.count(x[0]) == len(x)
+
 
 def _build_id_lut(array):
     """ create lookup table to query cellid by i,j value """
@@ -139,13 +159,13 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
     return infiles
 
 
-def _limit_years(years, df, yearcol='year'):
+def _limit_df_years(years, df, yearcol='year'):
     """ limit data.frame to specified years """
     if (years[-1] - years[0] == len(years) - 1) and (len(years) > 1):
         df = df[(df[yearcol] >= years[0]) & (df[yearcol] <= years[-1])]
     else:
         df = df[df[yearcol].isin(years)]
-    log.debug('df: %s' % str(df.head()))
+    df = df.sort_values(by=basecols)
     return df
 
 
@@ -175,62 +195,39 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
                 varnames.append(v)
                 datacols.append(v)
 
-        # standard columns
-        basecols = ['id', 'year', 'julianday']
-
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
-
             fno = _extract_fileno(fname)
-
             df = pd.read_csv(fname,
                              delim_whitespace=True,
                              error_bad_lines=False,
                              usecols=basecols + datacols)
 
-            # store a full set of cell ids in file
-            if Dids.has_key(fno) == False:
-                Dids[fno] = sorted(list(OrderedDict.fromkeys(df['id'])))
+            Dids.setdefault(fno, sorted(list(set(df['id']))))
 
-            df = _limit_years(years, df)
-            df = df.sort_values(by=basecols)
+            df = _limit_df_years(years, df)
 
-            # calculate full table length ids * dates
+            dates = list(_daterange(dt.date(years[0],1,1), dt.date(years[-1]+1,1,1)))
 
-            daterange_file = list(_daterange(
-                dt.date(years[0], 1, 1), dt.date(years[-1] + 1, 1, 1)))
+            len_full_df = len(Dids[fno]) * len(dates)
+            len_this_df = len(df)
 
-            expected_len_df = len(Dids[fno]) * len(daterange_file)
-            actual_len_df = len(df)
-
-            if actual_len_df < expected_len_df:
-                basecoldata = [(0, d.year, d.timetuple().tm_yday)
-                               for d in daterange_file]
-
-                df_ref_all = []
-                for id in Dids[fno]:
-                    df_ref = pd.DataFrame(basecoldata, columns=basecols)
-                    df_ref.id = id
-                    df_ref_all.append(df_ref)
-                df_template = pd.concat(df_ref_all, axis=0)
-
-                # merge data from file to df template, values of missing days
-                # in file will be assigned 0.0
-                df = pd.merge(df_template, df, how='left', on=basecols)
-                df = df.fillna(0.0)
-                df.reset_index()
+            if len_this_df < len_full_df:
+                df = _gapfill_df(df, dates, Dids[fno])
 
             df = df.sort_values(by=basecols)
             dfs.append(df)
 
         # we don't have any dataframes, return
+        # TODO: the control flow here should be more obvious 
         if len(dfs) == 0:
+            log.warn("No data.frame filetype %s!" % ldndc_file_type)
             continue
 
-        # concat the dataframes for the split output (000, 001, ...)
         df = pd.concat(dfs, axis=0)
-        df.set_index(['id', 'year', 'julianday'], inplace=True)
+        df.set_index(basecols, inplace=True)
 
+        # sum columns if this was requested in the conf file
         for v in varData[ldndc_file_type]:
             if _is_composite_var(v):
                 new_colname, src_colnames = v
@@ -299,40 +296,14 @@ def main():
     Dlut = _build_id_lut(cell_ids)
 
     # read source output from ldndc
-    varnames, df = read_ldndc_txt(args.INDIR,
+    varinfos, df = read_ldndc_txt(args.indir,
                                   cfg['variables'],
                                   args.years,
                                   limiter=args.limiter)
 
+    # process data in yearly chunks
     ds_all = []
-
     for yr, yr_group in df.groupby('year'):
-
-        data = {}
-
-        for vname in varnames:
-            _blank = np.ma.ones((_ndays(yr),) + cell_ids.shape)
-            data[vname] = _blank * NODATA
-            data[vname][:] = np.ma.masked
-
-        # loop group-wise (group: id)
-        for id, id_group in yr_group.groupby('id'):
-
-            jdx, idx = Dlut[id]  # get cell position in array
-
-            for vname in varnames:
-                # check for incomplete year data, fill with nodata value till end of year
-                if len(id_group[vname]) < len(data[vname][:, 0, 0]):
-                    missingvals = _ndays(yr) - len(id_group[vname])
-                    dslice = np.concatenate(id_group[vname],
-                                            np.asarray([NODATA] * missingvals))
-                    log.warn("Data length encountered shorter than expected!")
-                else:
-                    dslize = id_group[vname]
-
-                data[vname][:, jdx, idx] = dslize
-
-        ds = xr.Dataset()
 
         # loop over variables and add those the netcdf file
         times = pd.date_range('%s-01-01' % yr,
@@ -340,29 +311,42 @@ def main():
                               periods=_ndays(yr),
                               tz=None)
 
-        for vname in varnames:
-            name, units = _split_colname(vname)
+        new_shape = (_ndays(yr),) + cell_ids.shape
+        blank_array = np.ma.array(np.ones(new_shape)*NODATA, mask=True)
 
-            # create dataarray (we need to flip it (!)
-            da = xr.DataArray(data[vname],
-                              coords=[('time', times), ('lat', lats),
-                                      ('lon', lons)])
-            da.name = name
-            da.attrs.update(defaultAttrsDA)
-            da.attrs['units'] = units
+        # init datasets
+        ds = xr.Dataset()
+        for varinfo in varinfos:
+            name, units = _split_colname(varinfo)
+            ds[name] = xr.DataArray(blank_array,
+                                    name=name,
+                                    coords=[('time', times),
+                                            ('lat', lats),
+                                            ('lon', lons)],
+                                    attrs=defaultAttrsDA.update({'units': units}),
+                                    encoding={'complevel': 5,
+                                              'zlib': True,
+                                              'chunksizes': (10, 40, 20),
+                                              'shuffle': True})
 
-            # more optimization for faster netcdfs !!!
-            da.encoding.update({'complevel': 5,
-                                'zlib': True,
-                                'chunksizes': (10, 40, 20),
-                                'shuffle': True})  # add compression
-            ds[name] = da
+        # iterate over cellids and variables
+        for id, id_group in yr_group.groupby('id'):
+            jdx, idx = Dlut[id]
+            for varinfo in varinfos:
+                name, _ = _split_colname(varinfo)
+                if len(id_group[varinfo]) < len(times):
+                    missingvals = _ndays(yr) - len(id_group[varinfo])
+                    dslice = np.concatenate(id_group[varinfo],
+                                            np.asarray([NODATA] * missingvals))
+                    log.warn("Data length encountered shorter than expected!")
+                else:
+                    dslize = id_group[varinfo]
+                ds[name][:, jdx, idx] = dslize
 
         if args.split:
             outfilename = args.outfile[:-3] + '_%d' % yr + '.nc'
-
             ds.to_netcdf(
-                os.path.join(args.OUTDIR, outfilename),
+                os.path.join(args.outdir, outfilename),
                 format='NETCDF4_CLASSIC')
             ds.close()
         else:
@@ -371,6 +355,6 @@ def main():
     if not args.split:
         ds = xr.concat(ds_all, dim='time')
         ds.to_netcdf(
-            os.path.join(args.OUTDIR, args.outfile),
+            os.path.join(args.outdir, args.outfile),
             format='NETCDF4_CLASSIC')
         ds.close()
