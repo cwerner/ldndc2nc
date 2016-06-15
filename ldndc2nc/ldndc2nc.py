@@ -257,29 +257,26 @@ def main():
     # read config
     cfg = get_config(args.config)
 
+    # write config
     if args.storeconfig:
         set_config(cfg)
 
+    # read or build refdata array
     def use_passed_conf_file():
         return args.refinfo is not None
 
     if use_passed_conf_file():
-        try:
-            refname, refvar = args.refinfo
-        except:
-            log.critical("Specified refinfo not valid: %s" % args.refinfo)
-            exit(1)
-
-        if os.path.isfile(refname):
-            with (xr.open_dataset(refname)) as refnc:
+        reffile, refvar = args.refinfo
+        if os.path.isfile(reffile):
+            with (xr.open_dataset(reffile)) as refnc:
                 if refvar not in refnc.data_vars:
-                    log.critical("Var <%s> not in %s" % (refvar, refname))
+                    log.critical("Var <%s> not in %s" % (refvar, reffile))
                     exit(1)
                 cell_ids = np.flipud(refnc[refvar].values)
                 lats = refnc['lat'].values
                 lons = refnc['lon'].values
         else:
-            log.critical("Specified reffile %s not found" % refname)
+            log.critical("Specified reffile %s not found" % reffile)
             exit(1)
     else:
         rdb = RefDataBuilder(cfg)
