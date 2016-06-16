@@ -165,6 +165,12 @@ def _limit_df_years(years, df, yearcol='year'):
         df = df[(df[yearcol] >= years[0]) & (df[yearcol] <= years[-1])]
     else:
         df = df[df[yearcol].isin(years)]
+    if len(df) == 0:
+        if len(years) == 1:
+            log.critical('Year %d not in data' % years[0])
+        else:
+            log.critical('Year range %d-%d not in data' % (years[0], years[-1]))
+        exit(1)
     df = df.sort_values(by=basecols)
     return df
 
