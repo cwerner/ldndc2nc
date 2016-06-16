@@ -1,0 +1,8 @@
+before_script:
+  - apt install python2-pip
+  - pip2 install -q -r requirements.txt
+
+master:
+  script: "python setup.py sdist"
+  only:
+      - master
