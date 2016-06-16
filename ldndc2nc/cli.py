@@ -52,6 +52,8 @@ class RangeAction(argparse.Action):
                     _ = int(e)
                 except:
                     return False
+            if int(s[1]) < int(s[0]):
+                return False
             return True
 
         if is_valid_year_range(s):
