@@ -26,7 +26,7 @@ import xarray as xr
 from .cli import cli
 from .extra import get_config, parse_config, RefDataBuilder
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 log = logging.getLogger(__name__)
 
