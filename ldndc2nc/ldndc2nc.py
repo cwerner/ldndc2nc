@@ -168,6 +168,21 @@ def _limit_df_years(years, df, yearcol='year'):
     return df
 
 
+def _read_global_info(cfg):
+    info = parse_config(cfg, section='info')
+    project = parse_config(cfg, section='project')
+    all_info = OrderedDict()
+    if info:
+        for k in info.keys(): all_info[k] = info[k]
+    else:
+        log.warn("No <info> data found in config")
+    if project:
+        for k in project.keys(): all_info[k] = project[k]
+    else:
+        log.warn("No <project> data found in config")
+    return all_info 
+
+
 def read_ldndc_txt(inpath, varData, years, limiter=''):
     """ parse ldndc txt output files and return dataframe """
 
@@ -291,6 +306,9 @@ def main():
         rdb = RefDataBuilder(cfg)
         cell_ids, lats, lons = rdb.build()
 
+    # get general info
+    global_info = _read_global_info(cfg)   
+
     # create lut for fast id-i,j matching
     Dlut = _build_id_lut(cell_ids)
 
@@ -314,7 +332,7 @@ def main():
         blank_array = np.ma.array(np.ones(new_shape)*NODATA, mask=True)
 
         # init datasets
-        ds = xr.Dataset()
+        ds = xr.Dataset(attrs=global_info)
         for varinfo in varinfos:
             name, units = _split_colname(varinfo)
             ds[name] = xr.DataArray(blank_array,
