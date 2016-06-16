@@ -37,6 +37,7 @@ ldndc2nc -r REFDATA.nc,cid -y 2000-2010 -o output.nc ldndc_results_dir ldndc_net
 Usage
 -----
 
+```
 usage: ldndc2nc [-h] [-c MYCONF] [-l PATTERN] [-o OUTFILE] [-r FILE,VAR] [-s]
                 [-S] [-v] [-y YEARS]
                 indir outdir
@@ -55,5 +56,5 @@ optional arguments:
   -S           make passed config (-c) the new default (default: False)
   -v           increase output verbosity (default: False)
   -y YEARS     range of years to consider (default: 2000-2015)
-
+```
 
