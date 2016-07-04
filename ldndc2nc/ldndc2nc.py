@@ -336,18 +336,20 @@ def main():
                               tz=None)
 
         new_shape = (_ndays(yr),) + cell_ids.shape
-        blank_array = np.ma.array(np.ones(new_shape)*NODATA, mask=True)
 
         # init datasets
         ds = xr.Dataset(attrs=global_info)
         for varinfo in varinfos:
             name, units = _split_colname(varinfo)
+            varAttrs = defaultAttrsDA.copy()
+            varAttrs.update({'units': units})
+            blank_array = np.ma.array(np.ones(new_shape)*NODATA, mask=True)
             ds[name] = xr.DataArray(blank_array,
                                     name=name,
                                     coords=[('time', times),
                                             ('lat', lats),
                                             ('lon', lons)],
-                                    attrs=defaultAttrsDA.update({'units': units}),
+                                    attrs=varAttrs,
                                     encoding={'complevel': 5,
                                               'zlib': True,
                                               'chunksizes': (10, 40, 20),
