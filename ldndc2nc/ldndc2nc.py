@@ -103,7 +103,7 @@ def _build_id_lut(array):
     for j in range(len(array)):
         for i in range(len(array[0])):
             if not np.isnan(array[j, i]):
-                Dlut[int(array[j, i])] = (len(array) - j, i)
+                Dlut[int(array[j, i])] = (len(array) - j -1, i)
     return Dlut
 
 
