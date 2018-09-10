@@ -219,10 +219,13 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
             fno = _extract_fileno(fname)
-            df = pd.read_csv(fname,
-                             delim_whitespace=True,
+            #df = pd.read_csv(fname,
+            #                 delim_whitespace=True,
+            #                 error_bad_lines=False,
+            #                 usecols=basecols + datacols)
+            df = pd.read_table(fname,
                              error_bad_lines=False,
-                             usecols=basecols + datacols)
+                             usecols=basecols + datacols)            
 
             Dids.setdefault(fno, sorted(list(set(df['id']))))
 
@@ -320,7 +323,6 @@ def main():
 
     # create lut for fast id-i,j matching
     Dlut = _build_id_lut(cell_ids)
-
     # read source output from ldndc
     varinfos, df = read_ldndc_txt(args.indir,
                                   cfg['variables'],
