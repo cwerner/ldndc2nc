@@ -7,7 +7,6 @@
 # christian.werner@senckenberg.de
 """ldndc2nc.ldndc2nc: provides entry point main()."""
 
-import argparse
 import calendar
 from collections import OrderedDict
 import datetime as dt
@@ -15,16 +14,13 @@ import glob
 import logging
 import os
 import re
-import string
-import sys
 
 import numpy as np
 import pandas as pd
-import param
 import xarray as xr
 
 from .cli import cli
-from .extra import get_config, parse_config, RefDataBuilder
+from .extra import set_config, get_config, parse_config, RefDataBuilder
 
 __version__ = "0.0.3"
 
@@ -40,7 +36,7 @@ basecols = ['id', 'year', 'julianday']
 
 # functions
 def _split_colname(colname):
-    """ split colname into varname and units 
+    """ split colname into varname and units
 
         :param str colname: original ldndc outputfile colname
         :return: varname and unit
@@ -103,7 +99,7 @@ def _build_id_lut(array):
     for j in range(len(array)):
         for i in range(len(array[0])):
             if not np.isnan(array[j, i]):
-                Dlut[int(array[j, i])] = (len(array) - j, i)
+                Dlut[int(array[j, i])] = (len(array) - j - 1, i)
     return Dlut
 
 
@@ -132,9 +128,10 @@ def _extract_fileno(fname):
 
 def _select_files(inpath, ldndc_file_type, limiter=""):
     """ find all ldndc outfiles of given type from inpath (limit using limiter)
-    
+
         :param str inpath: path where files are located
-        :param str ldndc_file_type: LandscapeDNDC txt filename pattern (i.e. soilcheistry-daily.txt)
+        :param str ldndc_file_type: LandscapeDNDC txt filename pattern
+                   (i.e. soilchemistry-daily.txt)
         :param str limiter: (optional) limit selection using this expression
         :return: list of matching LandscapeDNDC txt files in indir
         :rtype: list
@@ -148,7 +145,7 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
     infiles.sort()
 
     if len(infiles) == 0:
-        msg  = "No LandscapeDNDC input files of type <%s>\n" % ldndc_file_type
+        msg = "No LandscapeDNDC input files of type <%s>\n" % ldndc_file_type
         msg += "Input dir:    %s\n" % inpath
         msg += "Pattern used: %s" % infile_pattern
         if limiter != "":
@@ -169,7 +166,8 @@ def _limit_df_years(years, df, yearcol='year'):
         if len(years) == 1:
             log.critical('Year %d not in data' % years[0])
         else:
-            log.critical('Year range %d-%d not in data' % (years[0], years[-1]))
+            log.critical('Year range %d-%d not in data' %
+                         (years[0], years[-1]))
         exit(1)
     df = df.sort_values(by=basecols)
     return df
@@ -180,14 +178,16 @@ def _read_global_info(cfg):
     project = parse_config(cfg, section='project')
     all_info = OrderedDict()
     if info:
-        for k in info.keys(): all_info[k] = info[k]
+        for k in info.keys():
+            all_info[k] = info[k]
     else:
         log.warn("No <info> data found in config")
     if project:
-        for k in project.keys(): all_info[k] = project[k]
+        for k in project.keys():
+            all_info[k] = project[k]
     else:
         log.warn("No <project> data found in config")
-    return all_info 
+    return all_info
 
 
 def read_ldndc_txt(inpath, varData, years, limiter=''):
@@ -219,16 +219,20 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
             fno = _extract_fileno(fname)
-            df = pd.read_csv(fname,
-                             delim_whitespace=True,
+            #df = pd.read_csv(fname,
+            #                 delim_whitespace=True,
+            #                 error_bad_lines=False,
+            #                 usecols=basecols + datacols)
+            df = pd.read_table(fname,
                              error_bad_lines=False,
-                             usecols=basecols + datacols)
+                             usecols=basecols + datacols)            
 
             Dids.setdefault(fno, sorted(list(set(df['id']))))
 
             df = _limit_df_years(years, df)
 
-            dates = list(_daterange(dt.date(years[0],1,1), dt.date(years[-1]+1,1,1)))
+            dates = list(_daterange(dt.date(years[0], 1, 1),
+                         dt.date(years[-1]+1, 1, 1)))
 
             len_full_df = len(Dids[fno]) * len(dates)
             len_this_df = len(df)
@@ -240,7 +244,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             dfs.append(df)
 
         # we don't have any dataframes, return
-        # TODO: the control flow here should be more obvious 
+        # TODO: the control flow here should be more obvious
         if len(dfs) == 0:
             log.warn("No data.frame filetype %s!" % ldndc_file_type)
             continue
@@ -269,16 +273,17 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         df_all.append(df)
 
     # check if all tables have the same number of rows
-    if _all_items_identical( [len(x) for x in df_all] ):
-        log.debug("All data.frames have the same length (n=%d)" % len(df_all[0]))
+    if _all_items_identical([len(x) for x in df_all]):
+        log.debug("All data.frames have the same length (n=%d)" %
+                  len(df_all[0]))
     else:
-        log.debug("Rows differ in data.frames: %s" % ''.join([str(len(x)) for x in df_all]))
+        log.debug("Rows differ in data.frames: %s" %
+                  ''.join([str(len(x)) for x in df_all]))
 
     df = pd.concat(df_all, axis=1)
     df.reset_index(inplace=True)
 
     return (varnames, df)
-
 
 
 def main():
@@ -314,11 +319,10 @@ def main():
         cell_ids, lats, lons = rdb.build()
 
     # get general info
-    global_info = _read_global_info(cfg)   
+    global_info = _read_global_info(cfg)
 
     # create lut for fast id-i,j matching
     Dlut = _build_id_lut(cell_ids)
-
     # read source output from ldndc
     varinfos, df = read_ldndc_txt(args.indir,
                                   cfg['variables'],
@@ -336,18 +340,20 @@ def main():
                               tz=None)
 
         new_shape = (_ndays(yr),) + cell_ids.shape
-        blank_array = np.ma.array(np.ones(new_shape)*NODATA, mask=True)
 
         # init datasets
         ds = xr.Dataset(attrs=global_info)
         for varinfo in varinfos:
             name, units = _split_colname(varinfo)
+            varAttrs = defaultAttrsDA.copy()
+            varAttrs.update({'units': units})
+            blank_array = np.ma.array(np.ones(new_shape)*NODATA, mask=True)
             ds[name] = xr.DataArray(blank_array,
                                     name=name,
                                     coords=[('time', times),
                                             ('lat', lats),
                                             ('lon', lons)],
-                                    attrs=defaultAttrsDA.update({'units': units}),
+                                    attrs=varAttrs,
                                     encoding={'complevel': 5,
                                               'zlib': True,
                                               'chunksizes': (10, 40, 20),
@@ -360,7 +366,7 @@ def main():
                 name, _ = _split_colname(varinfo)
                 if len(id_group[varinfo]) < len(times):
                     missingvals = _ndays(yr) - len(id_group[varinfo])
-                    dslice = np.concatenate(id_group[varinfo],
+                    dslize = np.concatenate(id_group[varinfo],
                                             np.asarray([NODATA] * missingvals))
                     log.warn("Data length encountered shorter than expected!")
                 else:

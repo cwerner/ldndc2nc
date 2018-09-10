@@ -14,8 +14,6 @@ import pkg_resources
 
 version = pkg_resources.require("ldndc2nc")[0].version
 
-#version = "0.0.2"
-
 log = logging.getLogger(__name__)
 
 
@@ -119,6 +117,7 @@ def cli():
     parser.add_argument("-l",
                     dest="limiter",
                     metavar='PATTERN',
+                    default='',
                     help="limit files by PATTERN")
 
     parser.add_argument("-o",
@@ -158,7 +157,7 @@ def cli():
                     action=RangeAction,
                     help="range of years to consider")
 
-    print GREETING
+    print(GREETING)
 
     args = parser.parse_args()
 

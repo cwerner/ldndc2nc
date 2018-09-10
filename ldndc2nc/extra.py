@@ -70,11 +70,6 @@ def _parse_config(cfgFile):
     return cfg
 
 
-def _check_section(section):
-    print section
-    exit(1)
-
-
 def parse_config(cfg, section=None):
     """ parse config data structure, return data of required section """
 
