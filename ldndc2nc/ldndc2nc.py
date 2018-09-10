@@ -22,7 +22,7 @@ import xarray as xr
 from .cli import cli
 from .extra import set_config, get_config, parse_config, RefDataBuilder
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 log = logging.getLogger(__name__)
 
