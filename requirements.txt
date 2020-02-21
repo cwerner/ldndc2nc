@@ -1,3 +1,7 @@
 # Dev/Deployment
 param
 pyyaml
+pandas
+netcdf4
+xarray
+

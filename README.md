@@ -2,7 +2,7 @@ LandscapeDNDC inventory postprocessor to netCDF format
 ===============================
 
 version number: 0.0.3
-author: Christian Werner (christian.werner@senckenberg.de)
+author: Christian Werner (christian.werner@kit.edu)
 
 Overview
 --------
@@ -21,7 +21,7 @@ To install use pip:
 
 Or clone the repo:
 
-    $ git clone https://gitlab.com/cw_code/ldndc2nc.git
+    $ git clone https://github.com/cwerner/ldndc2nc.git
     $ python setup.py install
     
 Contributing
