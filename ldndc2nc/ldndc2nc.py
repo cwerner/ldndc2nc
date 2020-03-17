@@ -372,13 +372,14 @@ def main():
                                     coords=[('time', times),
                                             ('lat', lats),
                                             ('lon', lons)],
-                                    attrs=varAttrs,
-                                    encoding={'complevel': 5,
-                                              'zlib': True,
-                                              'chunksizes': (10, 40, 20),
-                                              'shuffle': True})
+                                    attrs=varAttrs)
 
         # iterate over cellids and variables
+        ENCODING={'complevel': 5,
+                  'zlib': True,
+                  'chunksizes': (10, 40, 20),
+                  'shuffle': True}
+        ENCODINGS = { k:ENCODING for k in ds.data_vars}
         for id, id_group in yr_group.groupby('id'):
             jdx, idx = Dlut[id]
             for varinfo in varinfos:
@@ -396,7 +397,8 @@ def main():
             outfilename = args.outfile[:-3] + '_%d' % yr + '.nc'
             ds.to_netcdf(
                 os.path.join(args.outdir, outfilename),
-                format='NETCDF4_CLASSIC')
+                format='NETCDF4_CLASSIC',
+                encoding=ENCODINGS)
             ds.close()
         else:
             ds_all.append(ds)
@@ -405,5 +407,8 @@ def main():
         ds = xr.concat(ds_all, dim='time')
         ds.to_netcdf(
             os.path.join(args.outdir, args.outfile),
-            format='NETCDF4_CLASSIC')
+            format='NETCDF4_CLASSIC',
+            encoding=ENCODINGS)
         ds.close()
+
+
