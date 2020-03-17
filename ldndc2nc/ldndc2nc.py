@@ -118,7 +118,7 @@ def _extract_fileno(fname):
     x = re.findall(r"[0-9]{2,6}(?![0-9])", fname)
     if len(x) == 0:
         pass
-    elif len(x) == 1:
+    elif len(x) in [1,2] :
         fileno = int(x[0])
     else:
         log.critical("Multiple matches! fname: %s" % fname)
@@ -155,6 +155,15 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
 
     return infiles
 
+import dateutil.parser
+def _construct_date_columns(df):
+    if 'year' not in df.columns:
+        dat = pd.Series( [ dateutil.parser.parse( y) for y in df.datetime])
+        df['year'] = [y.year for y in dat]
+    if 'julianday' not in df.columns:
+        dat = pd.Series( [ dateutil.parser.parse( y) for y in df.datetime])
+        df['julianday'] = [y.dayofyear for y in dat]
+    return df
 
 def _limit_df_years(years, df, yearcol='year'):
     """ limit data.frame to specified years """
@@ -223,12 +232,22 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             #                 delim_whitespace=True,
             #                 error_bad_lines=False,
             #                 usecols=basecols + datacols)
+            basecols_extended = []
+            with open(fname) as f:
+                header = f.readline()
+                if 'datetime' in header:
+                    basecols_extended.append( 'datetime')
+                for b in basecols:
+                    if b in header:
+                        basecols_extended.append( b)
+            
             df = pd.read_table(fname,
                              error_bad_lines=False,
-                             usecols=basecols + datacols)            
+                             usecols=basecols_extended + datacols)            
 
             Dids.setdefault(fno, sorted(list(set(df['id']))))
 
+            df = _construct_date_columns( df)
             df = _limit_df_years(years, df)
 
             dates = list(_daterange(dt.date(years[0], 1, 1),
@@ -353,13 +372,14 @@ def main():
                                     coords=[('time', times),
                                             ('lat', lats),
                                             ('lon', lons)],
-                                    attrs=varAttrs,
-                                    encoding={'complevel': 5,
-                                              'zlib': True,
-                                              'chunksizes': (10, 40, 20),
-                                              'shuffle': True})
+                                    attrs=varAttrs)
 
         # iterate over cellids and variables
+        ENCODING={'complevel': 5,
+                  'zlib': True,
+                  'chunksizes': (10, 40, 20),
+                  'shuffle': True}
+        ENCODINGS = { k:ENCODING for k in ds.data_vars}
         for id, id_group in yr_group.groupby('id'):
             jdx, idx = Dlut[id]
             for varinfo in varinfos:
@@ -377,7 +397,8 @@ def main():
             outfilename = args.outfile[:-3] + '_%d' % yr + '.nc'
             ds.to_netcdf(
                 os.path.join(args.outdir, outfilename),
-                format='NETCDF4_CLASSIC')
+                format='NETCDF4_CLASSIC',
+                encoding=ENCODINGS)
             ds.close()
         else:
             ds_all.append(ds)
@@ -386,5 +407,8 @@ def main():
         ds = xr.concat(ds_all, dim='time')
         ds.to_netcdf(
             os.path.join(args.outdir, args.outfile),
-            format='NETCDF4_CLASSIC')
+            format='NETCDF4_CLASSIC',
+            encoding=ENCODINGS)
         ds.close()
+
+
