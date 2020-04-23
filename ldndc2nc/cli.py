@@ -9,7 +9,6 @@
 import argparse
 import datetime as dt
 import logging
-import os
 import pkg_resources
 
 version = pkg_resources.require("ldndc2nc")[0].version
