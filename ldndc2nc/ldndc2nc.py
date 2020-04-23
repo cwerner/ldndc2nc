@@ -114,7 +114,7 @@ def _extract_fileno(fname):
 
         example: GLOBAL_002_soilchemistry-daily.txt -> 002 -> 2
     """
-    fname = fname.basename()
+    fname = fname.name
     fileno = 0
     # find fileno in string (must be 2-6 digits long)
     x = re.findall(r"[0-9]{2,6}(?![0-9])", fname)
@@ -143,7 +143,7 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
     infiles.extend(list(Path(inpath).glob(f"*{ldndc_file_type}.gz")))
 
     if limiter != "":
-        infiles = [x for x in infiles if limiter in x.basename()]
+        infiles = [x for x in infiles if limiter in x.name]
 
     infiles.sort()
 
