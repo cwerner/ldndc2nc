@@ -10,8 +10,10 @@
 import calendar
 from collections import OrderedDict
 import datetime as dt
-import glob
+import gzip
+from pathlib import Path
 import logging
+import itertools
 import os
 import re
 
@@ -112,7 +114,7 @@ def _extract_fileno(fname):
 
         example: GLOBAL_002_soilchemistry-daily.txt -> 002 -> 2
     """
-    fname = os.path.basename(fname)
+    fname = fname.name
     fileno = 0
     # find fileno in string (must be 2-6 digits long)
     x = re.findall(r"[0-9]{2,6}(?![0-9])", fname)
@@ -136,11 +138,12 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
         :return: list of matching LandscapeDNDC txt files in indir
         :rtype: list
     """
-    infile_pattern = os.path.join(inpath, "*" + ldndc_file_type)
-    infiles = glob.glob(infile_pattern)
+    
+    infiles = list(Path(inpath).glob(f"*{ldndc_file_type}"))
+    infiles.extend(list(Path(inpath).glob(f"*{ldndc_file_type}.gz")))
 
     if limiter != "":
-        infiles = [x for x in infiles if limiter in os.path.basename(x)]
+        infiles = [x for x in infiles if limiter in x.name]
 
     infiles.sort()
 
@@ -233,7 +236,11 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             #                 error_bad_lines=False,
             #                 usecols=basecols + datacols)
             basecols_extended = []
-            with open(fname) as f:
+
+            # conditional open (either regular or gzip based on suffix)
+            opener = gzip.open if str(fname).endswith('.gz') else open
+
+            with opener(fname, 'rt') as f:
                 header = f.readline()
                 if 'datetime' in header:
                     basecols_extended.append( 'datetime')
@@ -322,14 +329,14 @@ def main():
 
     if use_cli_refdata():
         reffile, refvar = args.refinfo
-        if os.path.isfile(reffile):
+        reffile = Path(reffile)
+        if reffile.is_file():
             with (xr.open_dataset(reffile)) as refnc:
                 if refvar not in refnc.data_vars:
                     log.critical("Var <%s> not in %s" % (refvar, reffile))
                     exit(1)
                 cell_ids = np.flipud(refnc[refvar].values)
-                lats = refnc['lat'].values
-                lons = refnc['lon'].values
+                lats, lons = refnc.lat.values, refnc.lon.values
         else:
             log.critical("Specified reffile %s not found" % reffile)
             exit(1)
@@ -396,7 +403,7 @@ def main():
         if args.split:
             outfilename = args.outfile[:-3] + '_%d' % yr + '.nc'
             ds.to_netcdf(
-                os.path.join(args.outdir, outfilename),
+                Path(args.outdir) / outfilename,
                 format='NETCDF4_CLASSIC',
                 encoding=ENCODINGS)
             ds.close()
@@ -406,7 +413,7 @@ def main():
     if not args.split:
         ds = xr.concat(ds_all, dim='time')
         ds.to_netcdf(
-            os.path.join(args.outdir, args.outfile),
+            Path(args.outdir) / args.outfile,
             format='NETCDF4_CLASSIC',
             encoding=ENCODINGS)
         ds.close()

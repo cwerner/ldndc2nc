@@ -3,6 +3,7 @@
 
 import logging
 import os
+from pathlib import Path
 from pkg_resources import Requirement, resource_filename
 import shutil
 import string
@@ -26,21 +27,20 @@ def _copy_default_config():
 
     fname = resource_filename(
         Requirement.parse("ldndc2nc"), "ldndc2nc/data/ldndc2nc.conf")
-    shutil.copyfile(fname, os.path.join(
-        os.path.expanduser("~"), "ldndc2nc.conf"))
+    shutil.copyfile(fname, Path.home() / "ldndc2nc.conf")
 
 
 def _find_config():
     """ look for cfgFile in the default locations """
     cfgFile = None
-    locations = [os.curdir, os.path.expanduser("~"), "/etc/ldndc2nc",
+    locations = [Path('.'), Path.home(), Path("/etc/ldndc2nc"),
                  os.environ.get("LDNDC2NC_CONF")]
     locations = [x for x in locations if x is not None]
 
     for loc in locations:
-        f = os.path.join(loc, "ldndc2nc.conf")
-        if os.path.isfile(f):
-            cfgFile = f
+        f = loc / "ldndc2nc.conf"
+        if f.is_file(f):
+            cfgFile = str(f)
             break
 
     return cfgFile
@@ -50,7 +50,7 @@ def _parse_config(cfgFile):
     """ read yaml config file and modify special properties"""
 
     with open(cfgFile, 'r') as ymlfile:
-        cfg = yaml.load(ymlfile)
+        cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
     for k, vs in cfg['variables'].items():
         vs_new = []
