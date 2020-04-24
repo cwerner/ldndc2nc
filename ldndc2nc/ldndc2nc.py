@@ -8,7 +8,6 @@
 """ldndc2nc.ldndc2nc: provides entry point main()."""
 
 import calendar
-from collections import OrderedDict
 import datetime as dt
 import gzip
 from pathlib import Path
@@ -22,7 +21,7 @@ import pandas as pd
 import xarray as xr
 
 from .cli import cli
-from .extra import set_config, get_config, parse_config, RefDataBuilder
+from .extra import set_config, get_config, parse_config
 
 __version__ = "0.0.3"
 
@@ -33,8 +32,7 @@ NODATA = -9999
 defaultAttrsDA = {'_FillValue': NODATA, 'missing_value': NODATA}
 
 # standard columns
-basecols = ['id', 'year', 'julianday']
-
+basecols = ['id']
 
 # functions
 def _split_colname(colname):
@@ -158,22 +156,20 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
 
     return infiles
 
-import dateutil.parser
 def _construct_date_columns(df):
+    df["datetime"] = df.datetime.astype('datetime64[ns]')
     if 'year' not in df.columns:
-        dat = pd.Series( [ dateutil.parser.parse( y) for y in df.datetime])
-        df['year'] = [y.year for y in dat]
+        df['year'] = df.datetime.dt.year
     if 'julianday' not in df.columns:
-        dat = pd.Series( [ dateutil.parser.parse( y) for y in df.datetime])
-        df['julianday'] = [y.dayofyear for y in dat]
+        df['julianday'] = df.datetime.dt.dayofyear
     return df
 
 def _limit_df_years(years, df, yearcol='year'):
     """ limit data.frame to specified years """
     if (years[-1] - years[0] == len(years) - 1) and (len(years) > 1):
-        df = df[(df[yearcol] >= years[0]) & (df[yearcol] <= years[-1])]
+        df = df[(df.time.dt.year >= years[0]) & (df.time.dt.year <= years[-1])]
     else:
-        df = df[df[yearcol].isin(years)]
+        df = df[df.time.dt.year.isin(years)]
     if len(df) == 0:
         if len(years) == 1:
             log.critical('Year %d not in data' % years[0])
@@ -188,7 +184,7 @@ def _limit_df_years(years, df, yearcol='year'):
 def _read_global_info(cfg):
     info = parse_config(cfg, section='info')
     project = parse_config(cfg, section='project')
-    all_info = OrderedDict()
+    all_info = {}
     if info:
         for k in info.keys():
             all_info[k] = info[k]
@@ -231,10 +227,6 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
             fno = _extract_fileno(fname)
-            #df = pd.read_csv(fname,
-            #                 delim_whitespace=True,
-            #                 error_bad_lines=False,
-            #                 usecols=basecols + datacols)
             basecols_extended = []
 
             # conditional open (either regular or gzip based on suffix)
@@ -243,7 +235,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             with opener(fname, 'rt') as f:
                 header = f.readline()
                 if 'datetime' in header:
-                    basecols_extended.append( 'datetime')
+                    basecols_extended.append('datetime')
                 for b in basecols:
                     if b in header:
                         basecols_extended.append( b)
@@ -251,22 +243,13 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             df = pd.read_table(fname,
                              error_bad_lines=False,
                              usecols=basecols_extended + datacols)            
-
+            if 'datetime' in df.columns:
+                df['time'] = df.datetime.astype('datetime64[ns]')
+                df = df.drop('datetime', axis=1)
             Dids.setdefault(fno, sorted(list(set(df['id']))))
 
-            df = _construct_date_columns( df)
             df = _limit_df_years(years, df)
-
-            dates = list(_daterange(dt.date(years[0], 1, 1),
-                         dt.date(years[-1]+1, 1, 1)))
-
-            len_full_df = len(Dids[fno]) * len(dates)
-            len_this_df = len(df)
-
-            if len_this_df < len_full_df:
-                df = _gapfill_df(df, dates, Dids[fno])
-
-            df = df.sort_values(by=basecols)
+            df = df.sort_values(by=['id', 'time'])
             dfs.append(df)
 
         # we don't have any dataframes, return
@@ -276,7 +259,8 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             continue
 
         df = pd.concat(dfs, axis=0)
-        df.set_index(basecols, inplace=True)
+        df = df.sort_values(by=['id', 'time'])
+        df = df.set_index(['id', 'time'])
 
         # sum columns if this was requested in the conf file
         for v in varData[ldndc_file_type]:
@@ -294,8 +278,6 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
 
                 df.drop(drop_colnames, axis=1)
 
-        # TODO check why we have this line
-        df = df[~df.index.duplicated(keep='first')]
         df_all.append(df)
 
     # check if all tables have the same number of rows
@@ -306,8 +288,8 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         log.debug("Rows differ in data.frames: %s" %
                   ''.join([str(len(x)) for x in df_all]))
 
-    df = pd.concat(df_all, axis=1)
-    df.reset_index(inplace=True)
+    df = pd.concat(df_all, axis=1).fillna(0.0)
+    df = df.reset_index()
 
     return (varnames, df)
 
@@ -335,14 +317,21 @@ def main():
                 if refvar not in refnc.data_vars:
                     log.critical("Var <%s> not in %s" % (refvar, reffile))
                     exit(1)
-                cell_ids = np.flipud(refnc[refvar].values)
+                cell_ids = refnc[refvar]
                 lats, lons = refnc.lat.values, refnc.lon.values
         else:
             log.critical("Specified reffile %s not found" % reffile)
             exit(1)
     else:
-        rdb = RefDataBuilder(cfg)
-        cell_ids, lats, lons = rdb.build()
+        log.error("You need to specify a reffile")
+        exit(1)
+
+    dm = {}
+    for ila, la in enumerate(lats):
+        for ilo, lo in enumerate(lons):        
+            the_id = cell_ids.loc[{'lat': la, 'lon': lo}].values
+            if np.isnan(the_id) == False:
+                dm[int(the_id)] = (la,lo)
 
     # get general info
     global_info = _read_global_info(cfg)
@@ -350,72 +339,78 @@ def main():
     # create lut for fast id-i,j matching
     Dlut = _build_id_lut(cell_ids)
     # read source output from ldndc
+    log.info(cfg["variables"])
     varinfos, df = read_ldndc_txt(args.indir,
                                   cfg['variables'],
                                   args.years,
                                   limiter=args.limiter)
 
+    log.info(df.columns)
+
+
+    df["lat"], df["lon"] = zip(*df.id.map(dm))
+    df = df.set_index(['time','lat','lon'])
+    df = df.drop('id', axis=1)
+    df.sort_index(inplace=True)
+
     # process data in yearly chunks
-    ds_all = []
-    for yr, yr_group in df.groupby('year'):
+    UNITS = {k:v for k, v in [_split_colname(colname) for colname in df.columns]}
 
-        # loop over variables and add those the netcdf file
-        times = pd.date_range('%s-01-01' % yr,
-                              freq='D',
-                              periods=_ndays(yr),
-                              tz=None)
+    df.columns = UNITS.keys()
 
-        new_shape = (_ndays(yr),) + cell_ids.shape
 
-        # init datasets
-        ds = xr.Dataset(attrs=global_info)
-        for varinfo in varinfos:
-            name, units = _split_colname(varinfo)
-            varAttrs = defaultAttrsDA.copy()
-            varAttrs.update({'units': units})
-            blank_array = np.ma.array(np.ones(new_shape)*NODATA, mask=True)
-            ds[name] = xr.DataArray(blank_array,
-                                    name=name,
-                                    coords=[('time', times),
-                                            ('lat', lats),
-                                            ('lon', lons)],
-                                    attrs=varAttrs)
+    # iterate over cellids and variables
+    ENCODING={'complevel': 5,
+                'zlib': True,
+                'chunksizes': (10, 20, 40),
+                'shuffle': True}
 
-        # iterate over cellids and variables
-        ENCODING={'complevel': 5,
-                  'zlib': True,
-                  'chunksizes': (10, 40, 20),
-                  'shuffle': True}
-        ENCODINGS = { k:ENCODING for k in ds.data_vars}
-        for id, id_group in yr_group.groupby('id'):
-            jdx, idx = Dlut[id]
-            for varinfo in varinfos:
-                name, _ = _split_colname(varinfo)
-                if len(id_group[varinfo]) < len(times):
-                    missingvals = _ndays(yr) - len(id_group[varinfo])
-                    dslize = np.concatenate(id_group[varinfo],
-                                            np.asarray([NODATA] * missingvals))
-                    log.warn("Data length encountered shorter than expected!")
+    def get_datavar_encodings(ds):
+        ENCODINGS = {}
+        for v in ds.data_vars:
+            new_chunksizes = []
+            for chk_data, chk_default in zip(ds[v].shape, ENCODING['chunksizes']):
+                if chk_data < chk_default:
+                    new_chunksizes.append(chk_data)
                 else:
-                    dslize = id_group[varinfo]
-                ds[name][:, jdx, idx] = dslize
+                    new_chunksizes.append(chk_default)
+            new_encoding = ENCODING.copy()
+            new_encoding.update({'chunksizes': tuple(new_chunksizes)})
 
-        if args.split:
-            outfilename = args.outfile[:-3] + '_%d' % yr + '.nc'
+            ENCODINGS[v] = new_encoding
+        return ENCODINGS
+
+
+    ds_all =[]
+    for yr, yr_group in df.groupby(df.index.get_level_values('time').year):
+        with xr.Dataset() as ds:
+            ds = ds.from_dataframe(yr_group)
+
+            # make sure we have a full year and full lat lon extent of data
+            ds = ds.reindex({"time": days, "lat": lats, "lon": lons})
+            days = pd.date_range(start=f'1/1/{yr}', end=f'12/31/{yr}')
+
+            # TODO: fix NaN values in reindexed time steps (i.e. from yearly files)
+            #       ideally they should be zero (but only the locations with actual sims)
+
+            ENCODINGS = get_datavar_encodings(ds)
+            for v in ds.data_vars:
+                ds[v].attrs['units'] = UNITS[v]
+
+            if args.split:
+                outfilename = f"{args.outfile[:-3]}_{yr}.nc"
+                ds.attrs = global_info
+                ds.to_netcdf(Path(args.outdir) / outfilename,
+                                format='NETCDF4_CLASSIC',
+                                encoding=ENCODINGS)
+            else:
+                ds_all.append(ds)
+    
+    if not args.split:
+        with xr.concat(ds_all, dim='time') as ds:
+            ENCODINGS = get_datavar_encodings(ds)
+            ds.attrs = global_info
             ds.to_netcdf(
-                Path(args.outdir) / outfilename,
+                Path(args.outdir) / args.outfile,
                 format='NETCDF4_CLASSIC',
                 encoding=ENCODINGS)
-            ds.close()
-        else:
-            ds_all.append(ds)
-
-    if not args.split:
-        ds = xr.concat(ds_all, dim='time')
-        ds.to_netcdf(
-            Path(args.outdir) / args.outfile,
-            format='NETCDF4_CLASSIC',
-            encoding=ENCODINGS)
-        ds.close()
-
-

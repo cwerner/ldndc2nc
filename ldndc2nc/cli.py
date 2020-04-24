@@ -44,6 +44,8 @@ class RangeAction(argparse.Action):
         def is_valid_year_range(s):
             if len(s) > 2:
                 return False
+            if len(s) == 1:
+                return True
             for e in s:
                 try:
                     _ = int(e)
