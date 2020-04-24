@@ -32,7 +32,6 @@ NODATA = -9999
 defaultAttrsDA = {'_FillValue': NODATA, 'missing_value': NODATA}
 
 # standard columns
-basecols = ['id', 'year', 'julianday']
 basecols = ['id']
 
 # functions
@@ -249,19 +248,8 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
                 df = df.drop('datetime', axis=1)
             Dids.setdefault(fno, sorted(list(set(df['id']))))
 
-            #df = _construct_date_columns( df)
             df = _limit_df_years(years, df)
-
-            #dates = list(_daterange(dt.date(years[0], 1, 1),
-            #             dt.date(years[-1]+1, 1, 1)))
-            #
-            #len_full_df = len(Dids[fno]) * len(dates)
-            #len_this_df = len(df)
-
-            #if len_this_df < len_full_df:
-            #    df = _gapfill_df(df, dates, Dids[fno])
-
-            df = df.sort_values(by=basecols)
+            df = df.sort_values(by=['id', 'time'])
             dfs.append(df)
 
         # we don't have any dataframes, return
@@ -271,7 +259,8 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             continue
 
         df = pd.concat(dfs, axis=0)
-        df.set_index(basecols, inplace=True)
+        df = df.sort_values(by=['id', 'time'])
+        df = df.set_index(['id', 'time'])
 
         # sum columns if this was requested in the conf file
         for v in varData[ldndc_file_type]:
@@ -289,8 +278,6 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
 
                 df.drop(drop_colnames, axis=1)
 
-        # TODO check why we have this line
-        #df = df[~df.index.duplicated(keep='first')]
         df_all.append(df)
 
     # check if all tables have the same number of rows
@@ -301,8 +288,8 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
         log.debug("Rows differ in data.frames: %s" %
                   ''.join([str(len(x)) for x in df_all]))
 
-    df = pd.concat(df_all, axis=1)
-    df.reset_index(inplace=True)
+    df = pd.concat(df_all, axis=1).fillna(0.0)
+    df = df.reset_index()
 
     return (varnames, df)
 
@@ -352,10 +339,14 @@ def main():
     # create lut for fast id-i,j matching
     Dlut = _build_id_lut(cell_ids)
     # read source output from ldndc
+    log.info(cfg["variables"])
     varinfos, df = read_ldndc_txt(args.indir,
                                   cfg['variables'],
                                   args.years,
                                   limiter=args.limiter)
+
+    log.info(df.columns)
+
 
     df["lat"], df["lon"] = zip(*df.id.map(dm))
     df = df.set_index(['time','lat','lon'])
