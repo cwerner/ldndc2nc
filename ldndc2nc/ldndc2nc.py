@@ -200,6 +200,11 @@ def _read_global_info(cfg):
     return all_info
 
 
+def read_ldndc_txt_v2(inpath, varData, years, limiter=''):
+    """ parse ldndc txt output files and return dataframe """
+
+    ldndc_file_types = varData.keys()    
+
 def read_ldndc_txt(inpath, varData, years, limiter=''):
     """ parse ldndc txt output files and return dataframe """
 
@@ -275,6 +280,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
 
         df = pd.concat(dfs, axis=0)
         df.set_index(basecols, inplace=True)
+        log.info(df.index)
 
         # sum columns if this was requested in the conf file
         for v in varData[ldndc_file_type]:
