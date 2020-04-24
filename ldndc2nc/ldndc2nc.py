@@ -163,7 +163,7 @@ def _construct_date_columns(df):
     if 'year' not in df.columns:
         df['year'] = df.datetime.dt.year
     if 'julianday' not in df.columns:
-        df['julianday'] = df.datetime.dt.year
+        df['julianday'] = df.datetime.dt.dayofyear
     return df
 
 def _limit_df_years(years, df, yearcol='year'):
