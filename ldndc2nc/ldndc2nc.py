@@ -384,7 +384,7 @@ def main():
         # iterate over cellids and variables
         ENCODING={'complevel': 5,
                   'zlib': True,
-                  'chunksizes': (10, 40, 20),
+                  'chunksizes': (10, 20, 40),
                   'shuffle': True}
         ENCODINGS = { k:ENCODING for k in ds.data_vars}
         for id, id_group in yr_group.groupby('id'):
