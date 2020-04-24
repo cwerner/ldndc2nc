@@ -158,14 +158,12 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
 
     return infiles
 
-import dateutil.parser
 def _construct_date_columns(df):
+    df["datetime"] = df.datetime.astype('datetime64')
     if 'year' not in df.columns:
-        dat = pd.Series( [ dateutil.parser.parse( y) for y in df.datetime])
-        df['year'] = [y.year for y in dat]
+        df['year'] = df.datetime.dt.year
     if 'julianday' not in df.columns:
-        dat = pd.Series( [ dateutil.parser.parse( y) for y in df.datetime])
-        df['julianday'] = [y.dayofyear for y in dat]
+        df['julianday'] = df.datetime.dt.year
     return df
 
 def _limit_df_years(years, df, yearcol='year'):
@@ -243,7 +241,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=''):
             with opener(fname, 'rt') as f:
                 header = f.readline()
                 if 'datetime' in header:
-                    basecols_extended.append( 'datetime')
+                    basecols_extended.append('datetime')
                 for b in basecols:
                     if b in header:
                         basecols_extended.append( b)
