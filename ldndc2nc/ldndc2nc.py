@@ -385,7 +385,13 @@ def main():
     for yr, yr_group in df.groupby(df.index.get_level_values('time').year):
         with xr.Dataset() as ds:
             ds = ds.from_dataframe(yr_group)
-            ds = ds.reindex({"lat": lats, "lon": lons})
+
+            # make sure we have a full year and full lat lon extent of data
+            ds = ds.reindex({"time": days, "lat": lats, "lon": lons})
+            days = pd.date_range(start=f'1/1/{yr}', end=f'12/31/{yr}')
+
+            # TODO: fix NaN values in reindexed time steps (i.e. from yearly files)
+            #       ideally they should be zero (but only the locations with actual sims)
 
             ENCODINGS = get_datavar_encodings(ds)
             for v in ds.data_vars:
