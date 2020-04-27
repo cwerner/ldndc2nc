@@ -15,18 +15,13 @@ Installation / Usage
 
 To install use pip:
 
-    $ pip install ldndc2nc
+    $ pip install git+https://github.com/cwerner/ldndc2nc.git#egg=ldndc2nc
 
-
-Or clone the repo:
-
-    $ git clone https://github.com/cwerner/ldndc2nc.git
-    $ python setup.py install
     
 Contributing
 ------------
 
-TBD
+Please file a pull request (PR) at github [here](https://github.com/cwerner/ldndc2nc/pulls).
 
 Example
 -------
