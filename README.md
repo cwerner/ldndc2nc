@@ -1,7 +1,6 @@
 LandscapeDNDC inventory postprocessor to netCDF format
 ===============================
 
-version number: 0.0.3
 author: Christian Werner (christian.werner@kit.edu)
 
 Overview
