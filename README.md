@@ -1,13 +1,12 @@
 LandscapeDNDC inventory postprocessor to netCDF format
 ===============================
 
-version number: 0.0.3
-author: Christian Werner (christian.werner@senckenberg.de)
+author: Christian Werner (christian.werner@kit.edu)
 
 Overview
 --------
 
-This package converts LanscapeDNDC output to netCDF files for selected variables.
+This package converts LandscapeDNDC output to netCDF files for selected variables.
 Currently used for Viet Nam inventory, but in general applicable for all raster-
 based LandscapeDNDC simulations.
 
@@ -21,7 +20,7 @@ To install use pip:
 
 Or clone the repo:
 
-    $ git clone https://gitlab.com/cw_code/ldndc2nc.git
+    $ git clone https://github.com/cw_code/ldndc2nc.git
     $ python setup.py install
     
 Contributing
