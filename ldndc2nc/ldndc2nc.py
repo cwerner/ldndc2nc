@@ -23,8 +23,6 @@ import xarray as xr
 from .cli import cli
 from .extra import set_config, get_config, parse_config
 
-__version__ = "0.0.5"
-
 log = logging.getLogger(__name__)
 
 # default attributes for netCDF variable of dataarrays

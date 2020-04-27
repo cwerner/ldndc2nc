@@ -1,13 +1,16 @@
 import logging
+from logging import NullHandler
 from logging.handlers import RotatingFileHandler
 import sys
 
-try:  # python 2.7+
-    from logging import NullHandler
-except ImportError:
-    class NullHandler(logging.Handler):
-        def emit(self, record):
-            pass
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version(__name__)
+except PackageNotFoundError:
+    # package is not installed
+   pass
+
 
 logging.getLogger(__name__).addHandler(NullHandler())
 
