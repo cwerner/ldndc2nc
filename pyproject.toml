@@ -8,4 +8,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "ldndc2nc/_version.py"
-local_scheme = "setuptools_scm.version:get_no_local_node"
+local_scheme = "no-local-version"
