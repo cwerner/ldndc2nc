@@ -2,11 +2,11 @@
 
 import setuptools
 
-+def version_scheme(version):
-+    from setuptools_scm.version import guess_next_dev_version
-+
-+    version = guess_next_dev_version(version)
-+    return version.replace("+", ".")
+def version_scheme(version):
+    from setuptools_scm.version import guess_next_dev_version
+
+    version = guess_next_dev_version(version)
+    return version.replace("+", ".")
 
 
 if __name__ == "__main__":
