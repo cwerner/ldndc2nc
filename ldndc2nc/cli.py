@@ -2,9 +2,6 @@
 #
 # cli.py
 # ==================
-#
-# Christian Werner
-# christian.werner@senckenberg.de
 
 import argparse
 import datetime as dt

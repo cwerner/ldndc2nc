@@ -2,9 +2,6 @@
 #
 # ldndc2nc.py
 # ==================
-#
-# Christian Werner
-# christian.werner@senckenberg.de
 """ldndc2nc.ldndc2nc: provides entry point main()."""
 
 import calendar

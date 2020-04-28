@@ -5,8 +5,6 @@ LandscapeDNDC inventory postprocessor to netCDF format
 ![Python](https://img.shields.io/badge/python-3.6%20%7C%203.7%20%7C%203.8-blue)
 ![Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 
-author: Christian Werner (christian.werner@kit.edu)
-
 Overview
 --------
 
@@ -19,7 +17,7 @@ Installation / Usage
 
 To install use pip:
 
-    $ pip install git+https://github.com/cwerner/ldndc2nc.git#egg=ldndc2nc
+    $ pip install ldndc2nc
 
     
 Contributing
