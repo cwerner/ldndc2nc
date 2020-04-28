@@ -1,4 +1,7 @@
-# pyproject.toml
+[project]
+readme = "README.md"
+python = "^3.6"
+
 [build-system]
 requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
 build-backend = "setuptools.build_meta"

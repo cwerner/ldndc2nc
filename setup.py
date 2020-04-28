@@ -2,6 +2,7 @@
 
 import setuptools
 
+# overwrite default behavior since test pypi does now allow dirty version numbering
 def local_scheme(version):
     return ""
 
