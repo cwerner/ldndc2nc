@@ -3,8 +3,8 @@ LandscapeDNDC inventory postprocessor to netCDF format
 
 ![Version](https://img.shields.io/github/v/release/cwerner/ldndc2nc?include_prereleases&sort=semver)
 ![Python](https://img.shields.io/badge/python-3.6%20%7C%203.7%20%7C%203.8-blue)
-![CI](https://github.com/cwerner/ldndc2nc/workflows/CI/badge.svg)
 ![Style](https://img.shields.io/badge/code%20style-black-000000.svg)
+![CI](https://github.com/cwerner/ldndc2nc/workflows/CI/badge.svg)
 
 Overview
 --------
