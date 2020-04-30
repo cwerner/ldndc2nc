@@ -3,11 +3,14 @@ from logging import NullHandler
 from logging.handlers import RotatingFileHandler
 import sys
 
-from importlib.metadata import version, PackageNotFoundError
+try:
+    from importlib import metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 
 try:
-    __version__ = version(__name__)
-except PackageNotFoundError:
+    __version__ = importlib_metadata.version(__name__)
+except importlib_metadata.PackageNotFoundError:
     # package is not installed
     pass
 
