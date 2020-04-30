@@ -26,8 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: >-
-          pip install --upgrade pip setuptools
-          pip install .
+          pip install --upgrade pip setuptools wheel .
 
       - name: Install dev dependencies
         run: >-
