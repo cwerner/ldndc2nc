@@ -1,6 +1,15 @@
 repos:
--   repo: https://github.com/ambv/black
-    rev: master
+# isort should run before black as black sometimes tweaks the isort output
+  - repo: https://github.com/timothycrosley/isort
+    rev: 4.3.21-2
+    hooks:
+      - id: isort
+        files: .+\.py$
+  - repo: https://github.com/ambv/black
+    rev: stable
     hooks:
     - id: black
-      language_version: python3.7
+  - repo: https://gitlab.com/pycqa/flake8
+    rev: 3.7.9
+    hooks:
+      - id: flake8
