@@ -7,18 +7,17 @@
 import calendar
 import datetime as dt
 import gzip
-from pathlib import Path
 import logging
-import itertools
-import os
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
 import xarray as xr
 
 from .cli import cli
-from .extra import set_config, get_config, parse_config
+from .extra import get_config, parse_config, set_config
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +27,7 @@ defaultAttrsDA = {"_FillValue": NODATA, "missing_value": NODATA}
 
 # standard columns
 basecols = ["id"]
+
 
 # functions
 def _split_colname(colname):
@@ -88,16 +88,6 @@ def _all_items_identical(x):
     return x.count(x[0]) == len(x)
 
 
-def _build_id_lut(array):
-    """ create lookup table to query cellid by i,j value """
-    Dlut = {}
-    for j in range(len(array)):
-        for i in range(len(array[0])):
-            if not np.isnan(array[j, i]):
-                Dlut[int(array[j, i])] = (len(array) - j - 1, i)
-    return Dlut
-
-
 def _extract_fileno(fname):
     """ extract file iterator
 
@@ -143,7 +133,6 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
     if len(infiles) == 0:
         msg = "No LandscapeDNDC input files of type <%s>\n" % ldndc_file_type
         msg += "Input dir:    %s\n" % inpath
-        msg += "Pattern used: %s" % infile_pattern
         if limiter != "":
             msg += "\nFilter used:  %s" % limiter
         log.critical(msg)
@@ -326,14 +315,12 @@ def main():
     for ila, la in enumerate(lats):
         for ilo, lo in enumerate(lons):
             the_id = cell_ids.loc[{"lat": la, "lon": lo}].values
-            if np.isnan(the_id) == False:
+            if np.isnan(the_id) is False:
                 dm[int(the_id)] = (la, lo)
 
     # get general info
     global_info = _read_global_info(cfg)
 
-    # create lut for fast id-i,j matching
-    Dlut = _build_id_lut(cell_ids)
     # read source output from ldndc
     log.info(cfg["variables"])
     varinfos, df = read_ldndc_txt(
@@ -381,8 +368,8 @@ def main():
             ds = ds.from_dataframe(yr_group)
 
             # make sure we have a full year and full lat lon extent of data
-            ds = ds.reindex({"time": days, "lat": lats, "lon": lons})
             days = pd.date_range(start=f"1/1/{yr}", end=f"12/31/{yr}")
+            ds = ds.reindex({"time": days, "lat": lats, "lon": lons})
 
             # TODO: fix NaN values in reindexed time steps (i.e. from yearly files)
             #       ideally they should be zero (but only the locations with actual sims)

@@ -6,6 +6,7 @@
 import argparse
 import datetime as dt
 import logging
+
 import pkg_resources
 
 version = pkg_resources.require("ldndc2nc")[0].version
@@ -49,7 +50,7 @@ class RangeAction(argparse.Action):
             for e in s:
                 try:
                     _ = int(e)
-                except:
+                except ValueError:
                     return False
             if int(s[1]) < int(s[0]):
                 return False

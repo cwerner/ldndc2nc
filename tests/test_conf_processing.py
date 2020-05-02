@@ -1,6 +1,5 @@
 import pytest
-
-from ldndc2nc.ldndc2nc import _split_colname, _is_composite_var, _all_items_identical
+from ldndc2nc.ldndc2nc import _all_items_identical, _is_composite_var, _split_colname
 
 
 def test_split_colname():

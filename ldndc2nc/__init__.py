@@ -1,7 +1,6 @@
 import logging
 from logging import NullHandler
 from logging.handlers import RotatingFileHandler
-import sys
 
 try:
     from importlib import metadata as importlib_metadata
