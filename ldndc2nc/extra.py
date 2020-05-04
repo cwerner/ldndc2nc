@@ -72,7 +72,7 @@ def _parse_config(cfgFile):
     return cfg
 
 
-def parse_config(cfg, section=None):
+def parse_config(cfg, section):
     """ parse config data structure, return data of required section """
 
     def is_valid_section(s):

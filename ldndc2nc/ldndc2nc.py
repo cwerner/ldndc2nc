@@ -13,7 +13,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 import xarray as xr
 
 from .cli import cli
@@ -167,8 +166,8 @@ def _limit_df_years(years, df, yearcol="year"):
 
 
 def _read_global_info(cfg):
-    info = parse_config(cfg, section="info")
-    project = parse_config(cfg, section="project")
+    info = parse_config(cfg, "info")
+    project = parse_config(cfg, "project")
     all_info = {}
     if info:
         for k in info.keys():
