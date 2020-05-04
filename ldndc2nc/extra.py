@@ -28,22 +28,19 @@ def _copy_default_config():
     shutil.copyfile(fname, Path.home() / "ldndc2nc.conf")
 
 
-def _find_config():
+def _find_config() -> Path:
     """ look for cfgFile in the default locations """
     cfgFile = None
+    env_var = os.environ.get("LDNDC2NC_CONF", "__NOTSET__")
+
     locations = [
-        Path("."),
-        Path.home(),
-        Path("/etc/ldndc2nc"),
-        os.environ.get("LDNDC2NC_CONF"),
+        x / "ldndc2nc.conf" for x in [Path("."), Path.home(), Path("/etc/ldndc2nc")]
     ]
-    locations = [x for x in locations if x is not None]
+    locations.append(Path(env_var))
 
     for loc in locations:
-        f = loc / "ldndc2nc.conf"
-        if f.is_file(f):
-            cfgFile = str(f)
-            break
+        if loc.is_file():
+            return loc
 
     return cfgFile
 
@@ -101,10 +98,9 @@ def get_config(cfgFile=None):
     def cfgfile_exists(cfgFile):
         return cfgFile is not None
 
-    if cfgfile_exists(cfgFile):
-        if not os.path.isfile(cfgFile):
-            log.critical("Specified configuration file not found.")
-            exit(1)
+    if not Path(cfgFile).is_file():
+        log.critical(f"Specified config file not found: {cfgFile}")
+        exit(1)
     else:
         cfgFile = _find_config()
 
