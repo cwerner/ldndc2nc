@@ -5,6 +5,7 @@
 __pycache__
 pip-wheel-metadata
 _version.py
+.pytest_cache
 
 # C extensions
 *.so
