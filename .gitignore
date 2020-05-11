@@ -3,6 +3,8 @@
 *.nc
 
 __pycache__
+pip-wheel-metadata
+_version.py
 
 # C extensions
 *.so
