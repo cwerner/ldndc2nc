@@ -82,8 +82,8 @@ class ConfigHandler:
     _write_config = write_config
     _get_section = get_section
 
-    def __init__(self, config_file=None):
-        self.cfg_file = find_config(config_file)
+    def __init__(self, local_file=None):
+        self.cfg_file = find_config(local_file=local_file)
         raw = read_config(self.cfg_file)
         self.cfg = self._encode(raw)
 
