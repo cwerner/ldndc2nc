@@ -280,7 +280,7 @@ def main():
                 if refvar not in refnc.data_vars:
                     log.critical("Var <%s> not in %s" % (refvar, reffile))
                     exit(1)
-                cell_ids = refnc[refvar]
+                cell_ids = refnc[refvar].where(refnc[refvar] > 0)
                 lats, lons = refnc.lat.values, refnc.lon.values
         else:
             log.critical("Specified reffile %s not found" % reffile)
@@ -293,7 +293,7 @@ def main():
     for ila, la in enumerate(lats):
         for ilo, lo in enumerate(lons):
             the_id = cell_ids.loc[{"lat": la, "lon": lo}].values
-            if np.isnan(the_id) is False:
+            if not np.isnan(the_id):
                 dm[int(the_id)] = (la, lo)
 
     # get general info
