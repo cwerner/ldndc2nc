@@ -225,12 +225,23 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
         df = df.sort_values(by=["id", "time"])
         df = df.set_index(["id", "time"])
 
+        cols_to_drop, cols_to_keep = [], []
+
         # sum columns if this was requested in the conf file
         for var in varData[ldndc_file_type]:
-            df[var.text] = df[var.sources].sum(axis=1)
+            df[var.text_full] = df[var.sources].sum(axis=1)
+            if var.text_full not in cols_to_keep:
+                cols_to_keep.append(var.text_full)
+            else:
+                raise ValueError(
+                    "Variable requested multiple times. Check your conf file."
+                )
 
-            if var.text not in var.sources:
-                df.drop(var.sources, axis=1)
+            cols_to_drop.extend(var.sources)
+
+        cols_to_drop = list(set(cols_to_drop).difference(set(cols_to_keep)))
+        if len(cols_to_drop) > 0:
+            df.drop(cols_to_drop, axis=1)
 
         df_all.append(df)
 
@@ -293,8 +304,6 @@ def main():
     varinfos, df = read_ldndc_txt(
         args.indir, config.section("variables"), args.years, limiter=args.limiter
     )
-
-    log.info(df.columns)
 
     df["lat"], df["lon"] = zip(*df.id.map(dm))
     df = df.set_index(["time", "lat", "lon"])
