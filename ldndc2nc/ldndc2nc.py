@@ -16,7 +16,7 @@ import pandas as pd
 import xarray as xr
 
 from .cli import cli
-from .extra import get_config, parse_config, set_config
+from .config_handler import ConfigHandler
 
 log = logging.getLogger(__name__)
 
@@ -165,23 +165,6 @@ def _limit_df_years(years, df, yearcol="year"):
     return df
 
 
-def _read_global_info(cfg):
-    info = parse_config(cfg, "info")
-    project = parse_config(cfg, "project")
-    all_info = {}
-    if info:
-        for k in info.keys():
-            all_info[k] = info[k]
-    else:
-        log.warn("No <info> data found in config")
-    if project:
-        for k in project.keys():
-            all_info[k] = project[k]
-    else:
-        log.warn("No <project> data found in config")
-    return all_info
-
-
 def read_ldndc_txt(inpath, varData, years, limiter=""):
     """ parse ldndc txt output files and return dataframe """
 
@@ -200,13 +183,9 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
         infiles = _select_files(inpath, ldndc_file_type, limiter=limiter)
 
         # special treatment for tuple entries in varData
-        for v in varData[ldndc_file_type]:
-            if _is_composite_var(v):
-                varnames.append(v[0])
-                datacols += v[1]
-            else:
-                varnames.append(v)
-                datacols.append(v)
+        for var in varData[ldndc_file_type]:
+            varnames.append(var.name)
+            datacols.extend(var.sources)
 
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
@@ -247,20 +226,11 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
         df = df.set_index(["id", "time"])
 
         # sum columns if this was requested in the conf file
-        for v in varData[ldndc_file_type]:
-            if _is_composite_var(v):
-                new_colname, src_colnames = v
-                drop_colnames = []
+        for var in varData[ldndc_file_type]:
+            df[var.text] = df[var.sources].sum(axis=1)
 
-                df[new_colname] = df[src_colnames].sum(axis=1)
-
-                # drop original columns if they are not explicitly requested
-                for v2 in varData[ldndc_file_type]:
-                    if not _is_composite_var(v2):
-                        if v2 in src_colnames:
-                            drop_colnames.append(v2)
-
-                df.drop(drop_colnames, axis=1)
+            if var.text not in var.sources:
+                df.drop(var.sources, axis=1)
 
         df_all.append(df)
 
@@ -282,12 +252,10 @@ def main():
     # parse args
     args = cli()
 
-    # read config
-    cfg = get_config(args.config)
+    config = ConfigHandler(args.config)
 
-    # write config
     if args.storeconfig:
-        set_config(cfg)
+        config.write()
 
     # read or build refdata array
     def use_cli_refdata():
@@ -318,12 +286,12 @@ def main():
                 dm[int(the_id)] = (la, lo)
 
     # get general info
-    global_info = _read_global_info(cfg)
+    global_info = config.global_info
 
     # read source output from ldndc
-    log.info(cfg["variables"])
+    log.info(config.variables)
     varinfos, df = read_ldndc_txt(
-        args.indir, cfg["variables"], args.years, limiter=args.limiter
+        args.indir, config.section("variables"), args.years, limiter=args.limiter
     )
 
     log.info(df.columns)
