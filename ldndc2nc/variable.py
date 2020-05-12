@@ -74,7 +74,7 @@ class Variable:
 
     @property
     def text_full(self) -> str:
-        part1 = f"{self._encode(self.name, self.unit)}"
+        part1 = self.text
         part2 = "=" + "+".join(self._sources) if self.is_composite else ""
         return part1 + part2
 

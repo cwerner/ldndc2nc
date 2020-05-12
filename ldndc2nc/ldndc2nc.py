@@ -87,6 +87,16 @@ def _all_items_identical(x):
     return x.count(x[0]) == len(x)
 
 
+def create_id_mapper(cell_ids: xr.DataArray):
+    dm = {}
+    for ila, la in enumerate(cell_ids.lat.values):
+        for ilo, lo in enumerate(cell_ids.lon.values):
+            the_id = cell_ids.loc[{"lat": la, "lon": lo}].values
+            if not np.isnan(the_id):
+                dm[int(the_id)] = (la, lo)
+    return dm
+
+
 def _extract_fileno(fname):
     """ extract file iterator
 
@@ -229,20 +239,20 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
 
         # sum columns if this was requested in the conf file
         for var in varData[ldndc_file_type]:
-            df[var.text_full] = df[var.sources].sum(axis=1)
-            if var.text_full not in cols_to_keep:
-                cols_to_keep.append(var.text_full)
+            df[var.name] = df[var.sources].sum(axis=1)
+            if var.name not in cols_to_keep:
+                cols_to_keep.append(var.name)
             else:
                 raise ValueError(
                     "Variable requested multiple times. Check your conf file."
                 )
 
             cols_to_drop.extend(var.sources)
+            cols_to_drop.append(var.text)
 
         cols_to_drop = list(set(cols_to_drop).difference(set(cols_to_keep)))
-        if len(cols_to_drop) > 0:
-            df.drop(cols_to_drop, axis=1)
 
+        df = df.drop(cols_to_drop, axis=1)
         df_all.append(df)
 
     # check if all tables have the same number of rows
@@ -289,31 +299,18 @@ def main():
         log.error("You need to specify a reffile")
         exit(1)
 
-    dm = {}
-    for ila, la in enumerate(lats):
-        for ilo, lo in enumerate(lons):
-            the_id = cell_ids.loc[{"lat": la, "lon": lo}].values
-            if not np.isnan(the_id):
-                dm[int(the_id)] = (la, lo)
-
-    # get general info
-    global_info = config.global_info
-
     # read source output from ldndc
-    log.info(config.variables)
+    log.debug(config.variables)
     varinfos, df = read_ldndc_txt(
         args.indir, config.section("variables"), args.years, limiter=args.limiter
     )
 
-    df["lat"], df["lon"] = zip(*df.id.map(dm))
+    id_mapper = create_id_mapper(cell_ids)
+    df["lat"], df["lon"] = zip(*df.id.map(id_mapper))
     df = df.set_index(["time", "lat", "lon"])
+
     df = df.drop("id", axis=1)
     df.sort_index(inplace=True)
-
-    # process data in yearly chunks
-    UNITS = {k: v for k, v in [_split_colname(colname) for colname in df.columns]}
-
-    df.columns = UNITS.keys()
 
     # iterate over cellids and variables
     ENCODING = {
@@ -352,11 +349,15 @@ def main():
 
             ENCODINGS = get_datavar_encodings(ds)
             for v in ds.data_vars:
-                ds[v].attrs["units"] = UNITS[v]
+                units = next(
+                    (var.unit for var in config.variables if var.name == v), None
+                )
+                if units:
+                    ds[v].attrs["units"] = units
 
             if args.split:
                 outfilename = f"{args.outfile[:-3]}_{yr}.nc"
-                ds.attrs = global_info
+                ds.attrs = config.global_info
                 ds.to_netcdf(
                     Path(args.outdir) / outfilename,
                     format="NETCDF4_CLASSIC",
@@ -368,7 +369,7 @@ def main():
     if not args.split:
         with xr.concat(ds_all, dim="time") as ds:
             ENCODINGS = get_datavar_encodings(ds)
-            ds.attrs = global_info
+            ds.attrs = config.global_info
             ds.to_netcdf(
                 Path(args.outdir) / args.outfile,
                 format="NETCDF4_CLASSIC",
