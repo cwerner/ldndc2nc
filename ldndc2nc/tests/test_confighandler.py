@@ -20,8 +20,9 @@ def mock_env_ldndc2nc_missing(monkeypatch):
 def fs_with_config_file(fs):
     fs.add_real_file(
         pkg_resources.resource_filename("ldndc2nc", "data/ldndc2nc.conf"),
-        target_path=Path(".") / "ldndc2nc.conf",
+        target_path=Path.home(),
     )
+    yield fs
 
 
 # NOTE: fs is a fixture provided by pyfakefs which patches itself into
@@ -59,9 +60,12 @@ class TestConfigHandler:
     def test_read_config(self, handler, fs_with_config_file):
         assert handler.cfg is not None
 
-    @pytest.mark.parametrize("path,expected", [(Path("."), True), (Path("bad"), False)])
+    @pytest.mark.parametrize(
+        "path,expected",
+        [(Path.home() / "ldndc2nc.conf", True), (Path("bad/ldndc2nc.conf"), False)],
+    )
     def test_find_path(self, handler, fs_with_config_file, path, expected):
-        assert (handler.file_path == Path(path / "ldndc2nc.conf")) == expected
+        assert (handler.file_path == path) == expected
 
     def test_variables(self, handler, fs_with_config_file):
         assert len(handler.variables) > 0
