@@ -1,4 +1,5 @@
 import pytest
+
 from ldndc2nc.ldndc2nc import _all_items_identical, _is_composite_var, _split_colname
 
 
@@ -20,6 +21,6 @@ def test_all_items_identical(input, result):
     assert _all_items_identical(input) == result
 
 
-@pytest.mark.xfail(raises=IndexError)
 def test_all_items_identical_empty():
-    _all_items_identical([])
+    with pytest.raises(IndexError):
+        _all_items_identical([])

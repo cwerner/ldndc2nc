@@ -1,5 +1,6 @@
 black
 pre-commit
+pyfakefs
 pytest
 pytest-cov
 pytest-xdist

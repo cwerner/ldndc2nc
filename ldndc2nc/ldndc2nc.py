@@ -13,11 +13,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 import xarray as xr
 
 from .cli import cli
-from .extra import get_config, parse_config, set_config
+from .config_handler import ConfigHandler
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +85,16 @@ def _is_composite_var(v):
 
 def _all_items_identical(x):
     return x.count(x[0]) == len(x)
+
+
+def create_id_mapper(cell_ids: xr.DataArray):
+    dm = {}
+    for ila, la in enumerate(cell_ids.lat.values):
+        for ilo, lo in enumerate(cell_ids.lon.values):
+            the_id = cell_ids.loc[{"lat": la, "lon": lo}].values
+            if not np.isnan(the_id):
+                dm[int(the_id)] = (la, lo)
+    return dm
 
 
 def _extract_fileno(fname):
@@ -166,23 +175,6 @@ def _limit_df_years(years, df, yearcol="year"):
     return df
 
 
-def _read_global_info(cfg):
-    info = parse_config(cfg, section="info")
-    project = parse_config(cfg, section="project")
-    all_info = {}
-    if info:
-        for k in info.keys():
-            all_info[k] = info[k]
-    else:
-        log.warn("No <info> data found in config")
-    if project:
-        for k in project.keys():
-            all_info[k] = project[k]
-    else:
-        log.warn("No <project> data found in config")
-    return all_info
-
-
 def read_ldndc_txt(inpath, varData, years, limiter=""):
     """ parse ldndc txt output files and return dataframe """
 
@@ -201,13 +193,9 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
         infiles = _select_files(inpath, ldndc_file_type, limiter=limiter)
 
         # special treatment for tuple entries in varData
-        for v in varData[ldndc_file_type]:
-            if _is_composite_var(v):
-                varnames.append(v[0])
-                datacols += v[1]
-            else:
-                varnames.append(v)
-                datacols.append(v)
+        for var in varData[ldndc_file_type]:
+            varnames.append(var.name)
+            datacols.extend(var.sources)
 
         # iterate over all files of one ldndc file type
         for fcnt, fname in enumerate(infiles):
@@ -247,22 +235,24 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
         df = df.sort_values(by=["id", "time"])
         df = df.set_index(["id", "time"])
 
+        cols_to_drop, cols_to_keep = [], []
+
         # sum columns if this was requested in the conf file
-        for v in varData[ldndc_file_type]:
-            if _is_composite_var(v):
-                new_colname, src_colnames = v
-                drop_colnames = []
+        for var in varData[ldndc_file_type]:
+            df[var.name] = df[var.sources].sum(axis=1)
+            if var.name not in cols_to_keep:
+                cols_to_keep.append(var.name)
+            else:
+                raise ValueError(
+                    "Variable requested multiple times. Check your conf file."
+                )
 
-                df[new_colname] = df[src_colnames].sum(axis=1)
+            cols_to_drop.extend(var.sources)
+            cols_to_drop.append(var.text)
 
-                # drop original columns if they are not explicitly requested
-                for v2 in varData[ldndc_file_type]:
-                    if not _is_composite_var(v2):
-                        if v2 in src_colnames:
-                            drop_colnames.append(v2)
+        cols_to_drop = list(set(cols_to_drop).difference(set(cols_to_keep)))
 
-                df.drop(drop_colnames, axis=1)
-
+        df = df.drop(cols_to_drop, axis=1)
         df_all.append(df)
 
     # check if all tables have the same number of rows
@@ -283,12 +273,10 @@ def main():
     # parse args
     args = cli()
 
-    # read config
-    cfg = get_config(args.config)
+    config = ConfigHandler(args.config)
 
-    # write config
     if args.storeconfig:
-        set_config(cfg)
+        config.write()
 
     # read or build refdata array
     def use_cli_refdata():
@@ -302,7 +290,7 @@ def main():
                 if refvar not in refnc.data_vars:
                     log.critical("Var <%s> not in %s" % (refvar, reffile))
                     exit(1)
-                cell_ids = refnc[refvar]
+                cell_ids = refnc[refvar].where(refnc[refvar] > 0)
                 lats, lons = refnc.lat.values, refnc.lon.values
         else:
             log.critical("Specified reffile %s not found" % reffile)
@@ -311,33 +299,18 @@ def main():
         log.error("You need to specify a reffile")
         exit(1)
 
-    dm = {}
-    for ila, la in enumerate(lats):
-        for ilo, lo in enumerate(lons):
-            the_id = cell_ids.loc[{"lat": la, "lon": lo}].values
-            if np.isnan(the_id) is False:
-                dm[int(the_id)] = (la, lo)
-
-    # get general info
-    global_info = _read_global_info(cfg)
-
     # read source output from ldndc
-    log.info(cfg["variables"])
+    log.debug(config.variables)
     varinfos, df = read_ldndc_txt(
-        args.indir, cfg["variables"], args.years, limiter=args.limiter
+        args.indir, config.section("variables"), args.years, limiter=args.limiter
     )
 
-    log.info(df.columns)
-
-    df["lat"], df["lon"] = zip(*df.id.map(dm))
+    id_mapper = create_id_mapper(cell_ids)
+    df["lat"], df["lon"] = zip(*df.id.map(id_mapper))
     df = df.set_index(["time", "lat", "lon"])
+
     df = df.drop("id", axis=1)
     df.sort_index(inplace=True)
-
-    # process data in yearly chunks
-    UNITS = {k: v for k, v in [_split_colname(colname) for colname in df.columns]}
-
-    df.columns = UNITS.keys()
 
     # iterate over cellids and variables
     ENCODING = {
@@ -376,11 +349,15 @@ def main():
 
             ENCODINGS = get_datavar_encodings(ds)
             for v in ds.data_vars:
-                ds[v].attrs["units"] = UNITS[v]
+                units = next(
+                    (var.unit for var in config.variables if var.name == v), None
+                )
+                if units:
+                    ds[v].attrs["units"] = units
 
             if args.split:
                 outfilename = f"{args.outfile[:-3]}_{yr}.nc"
-                ds.attrs = global_info
+                ds.attrs = config.global_info
                 ds.to_netcdf(
                     Path(args.outdir) / outfilename,
                     format="NETCDF4_CLASSIC",
@@ -392,7 +369,7 @@ def main():
     if not args.split:
         with xr.concat(ds_all, dim="time") as ds:
             ENCODINGS = get_datavar_encodings(ds)
-            ds.attrs = global_info
+            ds.attrs = config.global_info
             ds.to_netcdf(
                 Path(args.outdir) / args.outfile,
                 format="NETCDF4_CLASSIC",

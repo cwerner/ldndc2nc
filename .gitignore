@@ -1,5 +1,14 @@
 *.py[cod]
 
+*.nc
+
+__pycache__
+pip-wheel-metadata
+_version.py
+.pytest_cache
+.DS_Store
+.vscode
+
 # C extensions
 *.so
 
