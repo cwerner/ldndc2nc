@@ -59,8 +59,7 @@ class RangeAction(argparse.Action):
         if is_valid_year_range(s):
             setattr(namespace, self.dest, range(int(s[0]), int(s[-1]) + 1))
         else:
-            log.critical("No valid range: %s" % values)
-            exit(1)
+            raise ValueError(log.critical(f"No valid range: {values}"))
 
 
 class MultiArgsAction(argparse.Action):
@@ -75,8 +74,7 @@ class MultiArgsAction(argparse.Action):
         if len(s) == self._nsegs:
             setattr(namespace, self.dest, tuple(s))
         else:
-            log.critical("Syntax error in %s" % option_string)
-            exit(1)
+            raise SyntaxError(log.critical("Syntax error in %s" % option_string))
 
 
 class CustomFormatter(
@@ -183,7 +181,8 @@ def cli():
     log.debug("ldndc2nc called at: %s" % dt.datetime.now())
 
     if args.storeconfig and (args.config is None):
-        log.critical("Option -S requires that you pass a file with -c.")
-        exit(1)
+        raise ValueError(
+            log.critical("Option -S requires that you pass a file with -c.")
+        )
 
     return args

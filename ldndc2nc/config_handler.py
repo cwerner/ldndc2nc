@@ -65,15 +65,14 @@ def get_section(self, section):
         try:
             section_data = self.cfg.get(section, self.cfg.get(section.lower()))
         except KeyError:
-            log.critical(
+            log.warning(
                 f"Section <{section.lower()}> not found in cfg file {self.file_path}"
             )
-            log.critical(
-                f"The following sections are present: {list(self.cfg.keys())}."
-            )
+            log.warning(f"The following sections are present: {list(self.cfg.keys())}.")
     else:
-        log.critical(f"Section {section.lower()} is not a valid section")
-        raise RuntimeError
+        raise RuntimeError(
+            log.critical(f"Section {section.lower()} is not a valid section")
+        )
     return section_data
 
 

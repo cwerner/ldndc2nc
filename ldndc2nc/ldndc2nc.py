@@ -9,6 +9,7 @@ import datetime as dt
 import gzip
 import logging
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +27,13 @@ defaultAttrsDA = {"_FillValue": NODATA, "missing_value": NODATA}
 
 # standard columns
 basecols = ["id"]
+
+
+# catch CTRL+C and abort gracefully without stack trace
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
 
 
 # functions
@@ -287,16 +295,15 @@ def main():
         if reffile.is_file():
             with (xr.open_dataset(reffile)) as refnc:
                 if refvar not in refnc.data_vars:
-                    log.critical("Var <%s> not in %s" % (refvar, reffile))
-                    exit(1)
+                    raise ValueError(log.critical(f"Var <{refvar}> not in {reffile}"))
                 cell_ids = refnc[refvar].where(refnc[refvar] > 0)
                 lats, lons = refnc.lat.values, refnc.lon.values
         else:
-            log.critical("Specified reffile %s not found" % reffile)
-            exit(1)
+            raise FileNotFoundError(
+                log.critical(f"Specified reffile {reffile} not found")
+            )
     else:
-        log.error("You need to specify a reffile")
-        exit(1)
+        raise ValueError(log.critical("You need to specify a reffile"))
 
     # read source output from ldndc
     log.debug(config.variables)
