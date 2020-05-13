@@ -251,8 +251,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
             cols_to_drop.append(var.text)
 
         cols_to_drop = list(set(cols_to_drop).difference(set(cols_to_keep)))
-
-        df = df.drop(cols_to_drop, axis=1)
+        df = df.drop(cols_to_drop, axis=1, errors="ignore")
         df_all.append(df)
 
     # check if all tables have the same number of rows
