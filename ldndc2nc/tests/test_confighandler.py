@@ -53,7 +53,7 @@ def test_find_config_environ_missing(fs, mock_env_ldndc2nc_missing):
 
 @pytest.fixture(scope="class")
 def handler():
-    return ConfigHandler()
+    yield ConfigHandler()
 
 
 class TestConfigHandler:
