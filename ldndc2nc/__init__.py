@@ -1,4 +1,5 @@
 import logging
+import sys
 from logging import NullHandler
 from logging.handlers import RotatingFileHandler
 
@@ -13,6 +14,13 @@ except importlib_metadata.PackageNotFoundError:
     # package is not installed
     pass
 
+
+# silent exit hook
+def excepthook(exc_type, exc_value, exc_traceback):
+    print("Exit")
+
+
+sys.excepthook = excepthook
 
 logging.getLogger(__name__).addHandler(NullHandler())
 
