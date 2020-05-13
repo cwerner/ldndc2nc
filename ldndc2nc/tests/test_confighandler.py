@@ -59,9 +59,9 @@ class TestConfigHandler:
     def test_read_config(self, handler, fs_with_config_file):
         assert handler.cfg is not None
 
-    # @pytest.mark.parametrize("path,expected", [(Path("."), True), (Path("bad"), False)])
-    # def test_find_path(self, handler, fs_with_config_file, path, expected):
-    #     assert (handler.file_path == Path(path / "ldndc2nc.conf")) == expected
+    @pytest.mark.parametrize("path,expected", [(Path("."), True), (Path("bad"), False)])
+    def test_find_path(self, handler, fs_with_config_file, path, expected):
+        assert (handler.file_path == Path(path / "ldndc2nc.conf")) == expected
 
     def test_variables(self, handler, fs_with_config_file):
         assert len(handler.variables) > 0
