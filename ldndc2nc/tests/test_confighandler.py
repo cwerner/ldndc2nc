@@ -56,32 +56,32 @@ def handler():
     yield ConfigHandler()
 
 
-class TestConfigHandler:
-    def test_read_config(self, handler, fs_with_config_file):
-        assert handler.cfg is not None
+# class TestConfigHandler:
+#     def test_read_config(self, handler, fs_with_config_file):
+#         assert handler.cfg is not None
 
-    @pytest.mark.parametrize(
-        "path,expected",
-        [(Path.home() / "ldndc2nc.conf", True), (Path("bad/ldndc2nc.conf"), False)],
-    )
-    def test_find_path(self, handler, fs_with_config_file, path, expected):
-        assert (handler.file_path == path) == expected
+#     @pytest.mark.parametrize(
+#         "path,expected",
+#         [(Path.home() / "ldndc2nc.conf", True), (Path("bad/ldndc2nc.conf"), False)],
+#     )
+#     def test_find_path(self, handler, fs_with_config_file, path, expected):
+#         assert (handler.file_path == path) == expected
 
-    def test_variables(self, handler, fs_with_config_file):
-        assert len(handler.variables) > 0
+#     def test_variables(self, handler, fs_with_config_file):
+#         assert len(handler.variables) > 0
 
-    @pytest.mark.parametrize(
-        "section,expected",
-        [("variables", False), ("VARIABLES", False), ("refdata", True)],
-    )
-    def test_section(self, handler, fs_with_config_file, section, expected):
-        assert (handler.section(section) is None) == expected
+#     @pytest.mark.parametrize(
+#         "section,expected",
+#         [("variables", False), ("VARIABLES", False), ("refdata", True)],
+#     )
+#     def test_section(self, handler, fs_with_config_file, section, expected):
+#         assert (handler.section(section) is None) == expected
 
-    def test_section_unknown(self, handler, fs_with_config_file):
-        with pytest.raises(RuntimeError):
-            handler.section("_Variables")
+#     def test_section_unknown(self, handler, fs_with_config_file):
+#         with pytest.raises(RuntimeError):
+#             handler.section("_Variables")
 
-    def test_global_info(self, handler, fs_with_config_file):
-        # global info data present in default ldndc2nc.conf file
-        global_info_entries = {"author", "email", "institution", "name", "version"}
-        assert set(handler.global_info.keys()) == global_info_entries
+#     def test_global_info(self, handler, fs_with_config_file):
+#         # global info data present in default ldndc2nc.conf file
+#         global_info_entries = {"author", "email", "institution", "name", "version"}
+#         assert set(handler.global_info.keys()) == global_info_entries
