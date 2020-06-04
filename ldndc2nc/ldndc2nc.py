@@ -147,7 +147,7 @@ def _select_files(inpath, ldndc_file_type, limiter=""):
 
     infiles.sort()
 
-    if len(infiles) == 0:
+    if not infiles:
         msg = "No LandscapeDNDC input files of type <%s>\n" % ldndc_file_type
         msg += "Input dir:    %s\n" % inpath
         if limiter != "":
@@ -234,8 +234,8 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
             dfs.append(df)
 
         # we don't have any dataframes, return
-        # TODO: the control flow here should be more obvious
-        if len(dfs) == 0:
+                # TODO: the control flow here should be more obvious
+        if not dfs:
             log.warn("No data.frame filetype %s!" % ldndc_file_type)
             continue
 

@@ -30,7 +30,6 @@ def _copy_default_config():
 
 def _find_config() -> Path:
     """ look for cfgFile in the default locations """
-    cfgFile = None
     env_var = os.environ.get("LDNDC2NC_CONF", "__NOTSET__")
 
     locations = [
@@ -42,7 +41,7 @@ def _find_config() -> Path:
         if loc.is_file():
             return loc
 
-    return cfgFile
+    return None
 
 
 def _parse_config(cfgFile):

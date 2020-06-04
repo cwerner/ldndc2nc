@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 
 
 def identical(elements: List) -> bool:
-    return all([e == elements[0] for e in elements])
+    return all(e == elements[0] for e in elements)
 
 
 def valid_brackets(s: str) -> bool:
@@ -19,15 +19,13 @@ def valid_brackets(s: str) -> bool:
             cnt += 1
             if cnt > 1:
                 return False
-        if l == "]":
+        elif l == "]":
             cnt -= 1
             if cnt == 0:
                 cnt_closed += 1
             elif cnt < 0:
                 return False
-    if cnt_closed > 1:
-        return False
-    return True
+    return cnt_closed <= 1
 
 
 def variables_compatible(s: str, src: List[str]) -> bool:
