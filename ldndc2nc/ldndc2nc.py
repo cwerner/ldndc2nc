@@ -225,7 +225,7 @@ def read_ldndc_txt(inpath, varData, years, limiter=""):
                 fname, error_bad_lines=False, usecols=basecols_extended + datacols
             )
             if "datetime" in df.columns:
-                df["time"] = df.datetime.astype("datetime64[ns]")
+                df["time"] = df.datetime.astype("datetime64[D]")
                 df = df.drop("datetime", axis=1)
             Dids.setdefault(fno, sorted(list(set(df["id"]))))
 
